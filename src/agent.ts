@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
@@ -6,15 +5,14 @@ import { searchMemories, logConversation, getRecentHistory } from "./memory/mana
 import axios from "axios";
 
 // ── LLM clients ──────────────────────────────────────────────────────
-const anthropic = config.anthropicApiKey ? new Anthropic({ apiKey: config.anthropicApiKey }) : null;
-const openrouter = config.openRouterApiKey ? new OpenAI({
+const openrouter = new OpenAI({
     apiKey: config.openRouterApiKey,
     baseURL: "https://openrouter.ai/api/v1",
     defaultHeaders: {
         "HTTP-Referer": "https://github.com/TomNgata/gravityclaw",
         "X-Title": "Gravity Claw",
     }
-}) : null;
+});
 
 const SYSTEM_PROMPT = `You are Gravity Claw, a sophisticated multi-model agentic swarm. 
 Current Version: Level 7 (Optimized Swarm V2).
@@ -42,8 +40,6 @@ const MAX_ITERATIONS = 10;
  * Uses a fast model (StepFun) to decide which expert brain is best for the task.
  */
 async function getExpertModel(userMessage: string, history: string): Promise<string> {
-    if (!openrouter) return config.llmModel;
-
     const routerPrompt = `You are the Gravity Claw Orchestrator. 
 Analyze the user's message and history to select the best expert model.
 
@@ -101,80 +97,7 @@ export async function handleMessage(
     const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}${historyContext}\n\nYou are currently operating as the ${expertModel} expert.`;
 
     // 3. Dispatch
-    if (openrouter) {
-        return handleOpenRouter(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
-    } else if (anthropic) {
-        return handleAnthropic(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
-    } else {
-        throw new Error("No LLM provider configured.");
-    }
-}
-
-async function handleAnthropic(
-    userMessage: string,
-    userId: number,
-    systemPrompt: string,
-    model: string,
-    imageUrl?: string
-): Promise<string> {
-    const userContent: Anthropic.MessageParam["content"] = [];
-
-    if (imageUrl) {
-        try {
-            const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-            const base64 = Buffer.from(response.data, 'binary').toString('base64');
-            userContent.push({
-                type: "image",
-                source: { type: "base64", media_type: "image/jpeg", data: base64 },
-            } as any);
-        } catch (error) {
-            console.error("Vision error:", error);
-        }
-    }
-
-    userContent.push({ type: "text", text: userMessage });
-
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: userContent }];
-    let finalResponse = "";
-
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
-        const response = await anthropic!.messages.create({
-            model: model.includes("claude") ? model : "claude-3-5-sonnet-20240620",
-            max_tokens: 1024,
-            system: systemPrompt,
-            tools: toolDefinitions,
-            messages,
-        });
-
-        const toolUses = response.content.filter(b => b.type === "tool_use") as Anthropic.ToolUseBlock[];
-        const text = response.content.filter(b => b.type === "text").map(b => (b as any).text).join("\n");
-
-        if (toolUses.length === 0) {
-            finalResponse = text || "(No response)";
-            break;
-        }
-
-        messages.push({ role: "assistant", content: response.content });
-        const results: Anthropic.ToolResultBlockParam[] = [];
-
-        for (const tool of toolUses) {
-            console.log(`🔧 [Anthropic:${model}] Tool: ${tool.name}`);
-            try {
-                const res = await executeTool(tool.name, tool.input as any);
-                results.push({
-                    type: "tool_result",
-                    tool_use_id: tool.id,
-                    content: typeof res === "string" ? res : JSON.stringify(res),
-                });
-            } catch (e) {
-                results.push({ type: "tool_result", tool_use_id: tool.id, content: `Error: ${e}`, is_error: true });
-            }
-        }
-        messages.push({ role: "user", content: results });
-    }
-
-    logConversation(userId, userMessage, finalResponse || "⚠️ Max iterations reached.");
-    return finalResponse || "⚠️ Max iterations reached.";
+    return handleOpenRouter(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
 }
 
 async function handleOpenRouter(

@@ -32,7 +32,7 @@ function requireEnv(name: string, required: boolean = true): string | undefined 
 export const config: Config = {
     telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN")!,
     anthropicApiKey: requireEnv("ANTHROPIC_API_KEY", false),
-    openRouterApiKey: requireEnv("OPENROUTER_API_KEY", false),
+    openRouterApiKey: requireEnv("OPENROUTER_API_KEY")!,
     allowedUserIds: requireEnv("ALLOWED_USER_IDS")!
         .split(",")
         .map((id) => {
