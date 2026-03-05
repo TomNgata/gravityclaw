@@ -4,6 +4,8 @@ export interface Config {
     telegramBotToken: string;
     anthropicApiKey: string;
     allowedUserIds: number[];
+    openaiApiKey: string;
+    elevenLabsApiKey: string;
 }
 
 function requireEnv(name: string): string {
@@ -29,4 +31,6 @@ export const config: Config = {
             }
             return parsed;
         }),
+    openaiApiKey: requireEnv("OPENAI_API_KEY"),
+    elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY"),
 };

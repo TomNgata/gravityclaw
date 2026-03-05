@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
 import { searchMemories, logConversation, getRecentHistory } from "./memory/manager.js";
+import axios from "axios";
 
 // ── Claude client ──────────────────────────────────────────────────────
 const claude = new Anthropic({ apiKey: config.anthropicApiKey });
@@ -16,7 +17,11 @@ const MAX_ITERATIONS = 10;
 const MODEL = "claude-sonnet-4-20250514";
 
 // ── Agentic loop ───────────────────────────────────────────────────────
-export async function handleMessage(userMessage: string, userId: number): Promise<string> {
+export async function handleMessage(
+    userMessage: string,
+    userId: number,
+    imageUrl?: string
+): Promise<string> {
     // 1. Semantic memory recall (search for context based on current message)
     const memories = searchMemories(userMessage, 3);
     const memoryContext = memories.length > 0
@@ -33,8 +38,33 @@ export async function handleMessage(userMessage: string, userId: number): Promis
     const dynamicPrompt = `${SYSTEM_PROMPT}${memoryContext}${historyContext}`;
 
     // Build initial messages array
+    const userContent: Anthropic.MessageParam["content"] = [];
+
+    // Add image if present (Vision)
+    if (imageUrl) {
+        try {
+            const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+            const base64 = Buffer.from(response.data, 'binary').toString('base64');
+            const mediaType = "image/jpeg"; // Telegram photos are usually JPEGs
+
+            userContent.push({
+                type: "image",
+                source: {
+                    type: "base64",
+                    media_type: mediaType,
+                    data: base64,
+                },
+            } as any);
+        } catch (error) {
+            console.error("Vision image download error:", error);
+            // Continue without image or handle error
+        }
+    }
+
+    userContent.push({ type: "text", text: userMessage });
+
     const messages: Anthropic.MessageParam[] = [
-        { role: "user", content: userMessage },
+        { role: "user", content: userContent },
     ];
 
     let finalResponse = "";
