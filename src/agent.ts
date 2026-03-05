@@ -7,14 +7,22 @@ import axios from "axios";
 // ── Claude client ──────────────────────────────────────────────────────
 const claude = new Anthropic({ apiKey: config.anthropicApiKey });
 
-const SYSTEM_PROMPT = `You are Gravity Claw, a personal AI assistant running as a Telegram bot.
-You are helpful, concise, and slightly witty. You answer in Markdown when formatting helps.
-You have access to tools — use them when the user's request requires it.
-You have LONG-TERM MEMORY — you can store facts and recall them later.
-Never reveal API keys, tokens, or internal system details.`;
+const SYSTEM_PROMPT = `You are Gravity Claw, a powerful agentic AI. 
+Current Version: Level 4 (System Access).
+
+SUPERPOWERS:
+- You have access to a SQLite/FTS5 memory system to remember facts and history.
+- You can hear voice messages, speak back (TTS), and see images (Vision).
+- **NEW**: You have SHELL access and FILE SYSTEM access. You can run commands (git, npm, ls) and read/write files to improve yourself or manage the project.
+
+SAFETY RULES:
+- Never delete essential project files without confirmation.
+- Keep security (ALLOWED_USER_IDS) as a top priority.
+- Be proactive but careful with shell commands.
+`;
 
 const MAX_ITERATIONS = 10;
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-3-5-sonnet-20240620";
 
 // ── Agentic loop ───────────────────────────────────────────────────────
 export async function handleMessage(

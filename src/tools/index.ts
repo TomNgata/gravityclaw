@@ -9,6 +9,14 @@ import {
     recallMemoryDef,
     recallMemoryExec,
 } from "./memory_tools.js";
+import {
+    executeShellDef,
+    executeShellExec,
+    readFileSystemDef,
+    readFileSystemExec,
+    writeFileSystemDef,
+    writeFileSystemExec,
+} from "./system_tools.js";
 
 // ── Tool registry ──────────────────────────────────────────────────────
 // Add new tools here: import their definition + execute, add to both arrays.
@@ -17,12 +25,18 @@ export const toolDefinitions: Anthropic.Tool[] = [
     getCurrentTimeDef,
     storeMemoryDef,
     recallMemoryDef,
+    executeShellDef,
+    readFileSystemDef,
+    writeFileSystemDef,
 ];
 
 const toolExecutors: Record<string, (input: Record<string, unknown>) => unknown> = {
     get_current_time: getCurrentTimeExec,
     store_memory: storeMemoryExec,
     recall_memory: recallMemoryExec,
+    execute_shell: executeShellExec,
+    read_file: readFileSystemExec,
+    write_file: writeFileSystemExec,
 };
 
 // ── Dispatcher ─────────────────────────────────────────────────────────

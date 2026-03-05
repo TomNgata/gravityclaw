@@ -11,7 +11,9 @@ export interface Config {
 function requireEnv(name: string): string {
     const value = process.env[name];
     if (!value) {
+        const allKeys = Object.keys(process.env).join(", ");
         console.error(`❌  Missing required env var: ${name}`);
+        console.error(`   Available keys: ${allKeys.length > 500 ? allKeys.substring(0, 500) + "..." : allKeys}`);
         console.error(`   Copy .env.example → .env and fill in your values.`);
         process.exit(1);
     }

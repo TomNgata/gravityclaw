@@ -4,7 +4,7 @@ import { handleMessage } from "./agent.js";
 import { transcribeAudio } from "./voice/stt.js";
 import { synthesizeSpeech } from "./voice/tts.js";
 import { join } from "path";
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, createWriteStream } from "fs";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import axios from "axios";
@@ -55,7 +55,7 @@ bot.on("message:voice", async (ctx) => {
             responseType: 'stream'
         });
 
-        const writer = require('fs').createWriteStream(filePath);
+        const writer = createWriteStream(filePath);
         response.data.pipe(writer);
         await finished(writer);
 
