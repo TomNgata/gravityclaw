@@ -1,7 +1,7 @@
 {
   "name": "gravityclaw",
-  "version": "0.1.0",
-  "description": "Gravity Claw — a lean, secure personal AI agent (Telegram + Claude)",
+  "version": "0.2.0",
+  "description": "Gravity Claw — a sophisticated multi-model agentic swarm (Telegram + OpenRouter)",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -10,7 +10,6 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
     "axios": "^1.7.9",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.7",
