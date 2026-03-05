@@ -24,12 +24,18 @@ bot.use(async (ctx: Context, next) => {
 
 // ── Handle /start command ──────────────────────────────────────────────
 bot.command("start", async (ctx) => {
-    await ctx.reply(
-        "🦀 *Gravity Claw online.*\n\n" +
-        "I'm your personal AI agent. Send me a message and I'll do my best to help.\n\n" +
-        "_Powered by Claude — Level 2 (Memory) active._",
-        { parse_mode: "Markdown" }
-    );
+    const welcome = `🤖 **Gravity Claw Online**
+Version: Level 7 (Optimized Swarm V2)
+
+I am now a multi-model agentic swarm, dynamically routing your requests to specialized experts:
+- 🧠 **Strategy/Logic**: GPT-OSS 120B (Free)
+- 💻 **Engineering**: Qwen3 Coder 480B (Free)
+- 🔧 **Agentic/Tools**: GLM 4.5 Air (Free)
+- 👁️ **Vision/Chat**: Gemma 3 12B (Free)
+- ⚡ **Router**: StepFun 3.5 Flash (Free)
+
+How can I help you today?`;
+    await ctx.reply(welcome, { parse_mode: "Markdown" });
 });
 
 // ── Handle Voice Messages ──────────────────────────────────────────────
@@ -115,16 +121,6 @@ bot.on("message:text", async (ctx) => {
     try {
         const userId = ctx.from!.id;
         const response = await handleMessage(userMessage, userId);
-
-        if (response.includes("https://image.pollinations.ai")) {
-            // Extract URL (simple regex for this tool's specific pattern)
-            const urlMatch = response.match(/https:\/\/image\.pollinations\.ai\/prompt\/[^\s)]+/);
-            if (urlMatch) {
-                await ctx.replyWithPhoto(urlMatch[0], { caption: "✨ Here is your generated image!" });
-                return;
-            }
-        }
-
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
         console.error("Agent error:", error);

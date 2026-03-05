@@ -17,10 +17,6 @@ import {
     writeFileSystemDef,
     writeFileSystemExec,
 } from "./system_tools.js";
-import {
-    imageTools as imageToolsDef,
-    generateImage as generateImageExec,
-} from "./image_tools.js";
 
 import { config } from "../config.js";
 import { MCPClient } from "../mcp/client.js";
@@ -33,7 +29,6 @@ const internalExecutors: Record<string, (input: Record<string, unknown>) => unkn
     execute_shell: executeShellExec,
     read_file: readFileSystemExec,
     write_file: writeFileSystemExec,
-    generate_image: generateImageExec as any,
 };
 
 // ── State ──────────────────────────────────────────────────────────
@@ -44,7 +39,6 @@ export let toolDefinitions: Anthropic.Tool[] = [
     executeShellDef,
     readFileSystemDef,
     writeFileSystemDef,
-    ...imageToolsDef,
 ];
 
 const mcpClients: Record<string, MCPClient> = {};

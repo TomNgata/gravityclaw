@@ -16,18 +16,19 @@ const openrouter = config.openRouterApiKey ? new OpenAI({
     }
 }) : null;
 
-const SYSTEM_PROMPT = `You are Gravity Claw, a multi-model agentic swarm. 
-Current Version: Level 6 (Multi-Model Orchestration).
+const SYSTEM_PROMPT = `You are Gravity Claw, a sophisticated multi-model agentic swarm. 
+Current Version: Level 7 (Optimized Swarm V2).
 
 ORCHESTRATION ARCHITECTURE:
-- **Router**: Gemini 2.0 Flash Lite (Free/Fast).
-- **Expert (Code)**: Qwen 2.5 Coder (Specifically tuned for software).
-- **Expert (Reasoning)**: Llama 3.3 70B (High-IQ free reasoning).
-- **Expert (Speed/Vision)**: Gemini 2.0 Flash Lite.
+- **Router**: StepFun 3.5 Flash (Fast/Broad Context).
+- **Expert (Code)**: Qwen3 Coder 480B (Top-tier engineering).
+- **Expert (Agentic/Tools)**: GLM 4.5 Air (Logic-first tool orchestration).
+- **Expert (Reasoning)**: GPT-OSS 120B (High-IQ logic).
+- **Expert (Vision)**: Gemma 3 12B (Multimodal vision).
 
 SUPERPOWERS:
 - SQLite/FTS5 Memory.
-- Voice (STT/TTS) & Vision (Claude/Gemini).
+- Voice (STT/TTS) & Vision.
 - System Access (Shell/FS).
 - MCP Bridge (External Tools).
 
@@ -38,7 +39,7 @@ const MAX_ITERATIONS = 10;
 
 /**
  * The "Orchestrator" Router.
- * Uses a fast model (Gemini) to decide which expert brain is best for the task.
+ * Uses a fast model (StepFun) to decide which expert brain is best for the task.
  */
 async function getExpertModel(userMessage: string, history: string): Promise<string> {
     if (!openrouter) return config.llmModel;
@@ -47,54 +48,58 @@ async function getExpertModel(userMessage: string, history: string): Promise<str
 Analyze the user's message and history to select the best expert model.
 
 EXPERTS:
-1. "qwen/qwen-2.5-coder-32b-instruct:free": Best for coding, scripting, and technical architecture.
-2. "meta-llama/llama-3.3-70b-instruct:free": Best for complex logic, reasoning, and planning.
-3. "google/gemini-2.0-flash-lite-preview-02-05:free": Best for fast chat, vision (images), and real-time response.
-4. "arcee/trinity-large-preview:free": Best for creative writing, prompt generation, and roleplay.
+1. "qwen/qwen-3-coder-480b-a35b:free": Best for coding, scripting, and technical architecture.
+2. "z-ai/glm-4-5-air:free": Best for multi-step planning, tool use, and system tasks.
+3. "openai/gpt-oss-120b:free": Best for complex logic, math, and graduate-level reasoning.
+4. "google/gemma-3-12b:free": Best for vision, image analysis, and fast chat.
 
 RULES:
 - Return ONLY the model string.
-- Use "arcee/trinity-large-preview:free" if the user wants creative writing or prompt help.
-- Use "qwen/qwen-2.5-coder-32b-instruct:free" for ANY code-related request.
-- Default to "google/gemini-2.0-flash-lite-preview-02-05:free".`;
+- Default to "google/gemma-3-12b:free" for general chat.
+- Always pick "qwen/qwen-3-coder-480b-a35b:free" for software work.`;
 
     try {
         const response = await openrouter.chat.completions.create({
-            model: "google/gemini-2.0-flash-lite-preview-02-05:free",
+            model: "stepfun/step-3-5-flash:free",
             messages: [{ role: "user", content: routerPrompt }],
             max_tokens: 50,
         });
-        const selection = response.choices[0].message.content?.trim();
+        const selection = response.choices[0].message.content?.trim() || "google/gemma-3-12b:free";
         console.log(`🧠 Orchestrator: Directed to ${selection}`);
-        return selection || "google/gemini-2.0-flash-lite-preview-02-05:free";
+        return selection;
     } catch (e) {
         console.error("Router error, using default free model:", e);
-        return "google/gemini-2.0-flash-lite-preview-02-05:free";
+        return "google/gemma-3-12b:free";
     }
 }
 
 /**
  * Main handler for user messages.
- * Switches between Anthropic and OpenRouter based on configuration.
  */
 export async function handleMessage(
     userMessage: string,
     userId: number,
     imageUrl?: string
 ): Promise<string> {
+    // 1. Context Assembly
     const memories = searchMemories(userMessage, 3);
-    const history = getRecentHistory(userId, 5);
+    const history = getRecentHistory(userId, 10);
+    const historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
 
-    const historyText = history.map(h => `User: ${h.message}\nClaw: ${h.response}`).join("\n");
+    // 2. Orchestration
     const expertModel = await getExpertModel(userMessage, historyText);
 
     const memoryContext = memories.length > 0
         ? `\n\nRELEVANT MEMORIES:\n${memories.map(m => `- ${m.content}`).join("\n")}`
         : "";
 
-    const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}\n\nRECENT CONVERSATION:\n${historyText}`;
+    const historyContext = history.length > 0
+        ? `\n\nRECENT CONVERSATION:\n${historyText}`
+        : "";
 
-    // Decide provider path
+    const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}${historyContext}\n\nYou are currently operating as the ${expertModel} expert.`;
+
+    // 3. Dispatch
     if (openrouter) {
         return handleOpenRouter(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
     } else if (anthropic) {
