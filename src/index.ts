@@ -1,23 +1,34 @@
 import { bot } from "./bot.js";
-import { config } from "./config.js";
+import { initializeTools } from "./tools/index.js";
 
-// ── Startup ────────────────────────────────────────────────────────────
-console.log("🦀 Gravity Claw starting...");
-console.log(`   Allowed users: ${config.allowedUserIds.join(", ")}`);
-console.log(`   Mode: long-polling (no web server)`);
+async function main() {
+    try {
+        console.log("🦀 Gravity Claw starting...");
+
+        // 1. Initialize Tools (including MCP Bridge)
+        await initializeTools();
+
+        // 2. Start Bot
+        bot.start({
+            onStart: (info) => {
+                console.log(`🤖 Gravity Claw is online as @${info.username}`);
+                console.log(`🚀 Level 5 (MCP Core) Active`);
+            },
+        });
+    } catch (error) {
+        console.error("💥 Failed to start Gravity Claw:", error);
+        process.exit(1);
+    }
+}
 
 // Graceful shutdown
 const shutdown = () => {
-    console.log("\n🦀 Gravity Claw shutting down...");
+    console.log("🛑 Gravity Claw shutting down...");
     bot.stop();
     process.exit(0);
 };
+
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-// Start the bot (long-polling — no HTTP, no exposed ports)
-bot.start({
-    onStart: () => {
-        console.log("🦀 Gravity Claw online. Waiting for messages...");
-    },
-});
+main();

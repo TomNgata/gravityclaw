@@ -1,11 +1,18 @@
 import "dotenv/config";
 
+export interface MCPServerConfig {
+    name: string;
+    command: string;
+    args: string[];
+}
+
 export interface Config {
     telegramBotToken: string;
     anthropicApiKey: string;
     allowedUserIds: number[];
     openaiApiKey: string;
     elevenLabsApiKey: string;
+    mcpServers: MCPServerConfig[];
 }
 
 function requireEnv(name: string): string {
@@ -35,4 +42,5 @@ export const config: Config = {
         }),
     openaiApiKey: requireEnv("OPENAI_API_KEY"),
     elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY"),
+    mcpServers: process.env.MCP_SERVERS ? JSON.parse(process.env.MCP_SERVERS) : [],
 };
