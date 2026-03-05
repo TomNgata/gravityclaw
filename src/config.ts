@@ -8,8 +8,7 @@ export interface MCPServerConfig {
 
 export interface Config {
     telegramBotToken: string;
-    anthropicApiKey?: string;
-    openRouterApiKey?: string;
+    openRouterApiKey: string;
     allowedUserIds: number[];
     openaiApiKey: string;
     elevenLabsApiKey: string;
@@ -31,7 +30,6 @@ function requireEnv(name: string, required: boolean = true): string | undefined 
 
 export const config: Config = {
     telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN")!,
-    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY", false),
     openRouterApiKey: requireEnv("OPENROUTER_API_KEY")!,
     allowedUserIds: requireEnv("ALLOWED_USER_IDS")!
         .split(",")
@@ -46,5 +44,5 @@ export const config: Config = {
     openaiApiKey: requireEnv("OPENAI_API_KEY")!,
     elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY")!,
     mcpServers: process.env.MCP_SERVERS ? JSON.parse(process.env.MCP_SERVERS) : [],
-    llmModel: process.env.LLM_MODEL || "claude-3-5-sonnet-20240620",
+    llmModel: process.env.LLM_MODEL || "google/gemma-3-12b-it:free",
 };

@@ -4,8 +4,7 @@ import { handleMessage } from "./agent.js";
 import { transcribeAudio } from "./voice/stt.js";
 import { synthesizeSpeech } from "./voice/tts.js";
 import { join } from "path";
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, createWriteStream } from "fs";
-import { Readable } from "stream";
+import { existsSync, mkdirSync, unlinkSync, createWriteStream } from "fs";
 import { finished } from "stream/promises";
 import axios from "axios";
 
@@ -46,7 +45,6 @@ bot.on("message:voice", async (ctx) => {
     await ctx.replyWithChatAction("record_voice");
 
     try {
-        // 1. Get file path from Telegram
         const file = await ctx.getFile();
         const url = `https://api.telegram.org/file/bot${config.telegramBotToken}/${file.file_path}`;
 
@@ -54,29 +52,18 @@ bot.on("message:voice", async (ctx) => {
         if (!existsSync(tempDir)) mkdirSync(tempDir);
         const filePath = join(tempDir, `${file.file_id}.ogg`);
 
-        // 2. Download via axios
-        const response = await axios({
-            url,
-            method: 'GET',
-            responseType: 'stream'
-        });
-
+        const response = await axios({ url, method: 'GET', responseType: 'stream' });
         const writer = createWriteStream(filePath);
         response.data.pipe(writer);
         await finished(writer);
 
-        // 3. Transcribe
         const transcribedText = await transcribeAudio(filePath);
         console.log(`🎤 Voice from ${userId}: ${transcribedText}`);
 
-        // 4. Process with Agent
         console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const agentResponse = await handleMessage(transcribedText, userId);
-
-        // 5. Respond
         await ctx.reply(agentResponse, { parse_mode: "Markdown" });
 
-        // Clean up
         unlinkSync(filePath);
     } catch (error) {
         console.error("Voice handler error:", error);
@@ -92,19 +79,13 @@ bot.on("message:photo", async (ctx) => {
     await ctx.replyWithChatAction("typing");
 
     try {
-        // 1. Get the highest resolution photo
-        const photo = ctx.message.photo.pop()!;
         const file = await ctx.getFile();
         const imageUrl = `https://api.telegram.org/file/bot${config.telegramBotToken}/${file.file_path}`;
-
         const caption = ctx.message.caption || "What is in this image?";
         console.log(`📸 Photo from ${userId}: ${caption}`);
 
-        // 2. Process with Agent (passing the image URL)
         console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const response = await handleMessage(caption, userId, imageUrl);
-
-        // 3. Respond
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
         console.error("Photo handler error:", error);
@@ -120,7 +101,6 @@ bot.on("message:text", async (ctx) => {
     const userId = ctx.from!.id;
     console.log(`📩 [Bot] Received text from ${userId}: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`);
 
-    // Show "typing…" indicator while processing
     await ctx.replyWithChatAction("typing");
 
     try {

@@ -84,6 +84,7 @@ export async function handleMessage(
     const historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
 
     // 2. Orchestration
+    console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
     const expertModel = await getExpertModel(userMessage, historyText);
 
     const memoryContext = memories.length > 0
@@ -117,10 +118,11 @@ async function handleOpenRouter(
         }
     ];
 
+    console.log(`🚀 [OpenRouter] Dispatching to expert: ${model}`);
     let finalResponse = "";
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-        const response = await openrouter!.chat.completions.create({
+        const response = await openrouter.chat.completions.create({
             model: model,
             messages,
             tools: toolDefinitions.map(t => ({

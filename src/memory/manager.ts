@@ -23,7 +23,6 @@ export function saveMemory(content: string, category: string = "facts"): number 
 export function searchMemories(query: string, limit: number = 5): Memory[] {
     if (!query || query.trim().length === 0) return [];
 
-    // Use FTS5 MATCH for full-text search
     const stmt = db.prepare(`
     SELECT m.* FROM memories m
     JOIN memories_fts f ON m.id = f.content_id

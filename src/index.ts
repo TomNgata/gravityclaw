@@ -5,10 +5,8 @@ async function main() {
     try {
         console.log("🦀 Gravity Claw starting...");
 
-        // 1. Initialize Tools (including MCP Bridge)
         await initializeTools();
 
-        // 2. Start Bot
         bot.start({
             onStart: (info) => {
                 console.log(`🤖 Gravity Claw is online as @${info.username}`);
@@ -21,7 +19,6 @@ async function main() {
     }
 }
 
-// Graceful shutdown
 const shutdown = () => {
     console.log("🛑 Gravity Claw shutting down...");
     bot.stop();
