@@ -16,22 +16,59 @@ const openrouter = config.openRouterApiKey ? new OpenAI({
     }
 }) : null;
 
-const SYSTEM_PROMPT = `You are Gravity Claw, a powerful agentic AI. 
-Current Version: Level 5 (MCP Core).
+const SYSTEM_PROMPT = `You are Gravity Claw, a multi-model agentic swarm. 
+Current Version: Level 6 (Multi-Model Orchestration).
+
+ORCHESTRATION ARCHITECTURE:
+- **Router**: Gemini 2.0 Flash Lite (Free/Fast).
+- **Expert (Code)**: Qwen 2.5 Coder (Specifically tuned for software).
+- **Expert (Reasoning)**: Llama 3.3 70B (High-IQ free reasoning).
+- **Expert (Speed/Vision)**: Gemini 2.0 Flash Lite.
 
 SUPERPOWERS:
-- You have access to a SQLite/FTS5 memory system to remember facts and history.
-- You can hear voice messages, speak back (TTS), and see images (Vision).
-- You have SHELL access and FILE SYSTEM access. You can run commands (git, npm, ls) and read/write files.
-- **MCP BRIDGE**: You can connect to external servers to expand your tools.
+- SQLite/FTS5 Memory.
+- Voice (STT/TTS) & Vision (Claude/Gemini).
+- System Access (Shell/FS).
+- MCP Bridge (External Tools).
 
-SAFETY RULES:
-- Never delete essential project files without confirmation.
-- Keep security (ALLOWED_USER_IDS) as a top priority.
-- Be proactive but careful with shell commands.
+You are currently acting as one of these experts. Use your specialized strengths to fulfill the user's request.
 `;
 
 const MAX_ITERATIONS = 10;
+
+/**
+ * The "Orchestrator" Router.
+ * Uses a fast model (Gemini) to decide which expert brain is best for the task.
+ */
+async function getExpertModel(userMessage: string, history: string): Promise<string> {
+    if (!openrouter) return config.llmModel;
+
+    const routerPrompt = `You are the Gravity Claw Orchestrator. 
+Analyze the user's message and history to select the best expert model.
+
+EXPERTS:
+1. "qwen/qwen-2.5-coder-32b-instruct:free": Best for coding, scripts, and technical logic.
+2. "meta-llama/llama-3.3-70b-instruct:free": Best for complex reasoning and tool orchestration.
+3. "google/gemini-2.0-flash-lite-preview-02-05:free": Best for fast chat, vision, and general tasks.
+
+RULES:
+- Return ONLY the model string.
+- Default to "google/gemini-2.0-flash-lite-preview-02-05:free".`;
+
+    try {
+        const response = await openrouter.chat.completions.create({
+            model: "google/gemini-2.0-flash-lite-preview-02-05:free",
+            messages: [{ role: "user", content: routerPrompt }],
+            max_tokens: 50,
+        });
+        const selection = response.choices[0].message.content?.trim();
+        console.log(`🧠 Orchestrator: Directed to ${selection}`);
+        return selection || "google/gemini-2.0-flash-lite-preview-02-05:free";
+    } catch (e) {
+        console.error("Router error, using default free model:", e);
+        return "google/gemini-2.0-flash-lite-preview-02-05:free";
+    }
+}
 
 /**
  * Main handler for user messages.
@@ -42,26 +79,25 @@ export async function handleMessage(
     userId: number,
     imageUrl?: string
 ): Promise<string> {
-    // 1. Memory & History
     const memories = searchMemories(userMessage, 3);
+    const history = getRecentHistory(userId, 5);
+
+    const historyText = history.map(h => `User: ${h.message}\nClaw: ${h.response}`).join("\n");
+    const expertModel = await getExpertModel(userMessage, historyText);
+
     const memoryContext = memories.length > 0
         ? `\n\nRELEVANT MEMORIES:\n${memories.map(m => `- ${m.content}`).join("\n")}`
         : "";
 
-    const history = getRecentHistory(userId, 10);
-    const historyContext = history.length > 0
-        ? `\n\nRECENT CONVERSATION:\n${history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n")}`
-        : "";
+    const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}\n\nRECENT CONVERSATION:\n${historyText}`;
 
-    const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}${historyContext}`;
-
-    // 2. Decide provider
+    // Decide provider path
     if (openrouter) {
-        return handleOpenRouter(userMessage, userId, fullSystemPrompt, imageUrl);
+        return handleOpenRouter(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
     } else if (anthropic) {
-        return handleAnthropic(userMessage, userId, fullSystemPrompt, imageUrl);
+        return handleAnthropic(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
     } else {
-        throw new Error("No LLM provider configured (Anthropic or OpenRouter).");
+        throw new Error("No LLM provider configured.");
     }
 }
 
@@ -69,6 +105,7 @@ async function handleAnthropic(
     userMessage: string,
     userId: number,
     systemPrompt: string,
+    model: string,
     imageUrl?: string
 ): Promise<string> {
     const userContent: Anthropic.MessageParam["content"] = [];
@@ -93,7 +130,7 @@ async function handleAnthropic(
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         const response = await anthropic!.messages.create({
-            model: config.llmModel,
+            model: model.includes("claude") ? model : "claude-3-5-sonnet-20240620",
             max_tokens: 1024,
             system: systemPrompt,
             tools: toolDefinitions,
@@ -112,7 +149,7 @@ async function handleAnthropic(
         const results: Anthropic.ToolResultBlockParam[] = [];
 
         for (const tool of toolUses) {
-            console.log(`🔧 [Anthropic] Tool: ${tool.name}`);
+            console.log(`🔧 [Anthropic:${model}] Tool: ${tool.name}`);
             try {
                 const res = await executeTool(tool.name, tool.input as any);
                 results.push({
@@ -135,6 +172,7 @@ async function handleOpenRouter(
     userMessage: string,
     userId: number,
     systemPrompt: string,
+    model: string,
     imageUrl?: string
 ): Promise<string> {
     const messages: any[] = [
@@ -151,7 +189,7 @@ async function handleOpenRouter(
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         const response = await openrouter!.chat.completions.create({
-            model: config.llmModel,
+            model: model,
             messages,
             tools: toolDefinitions.map(t => ({
                 type: "function",
@@ -169,7 +207,7 @@ async function handleOpenRouter(
         messages.push(choice);
 
         for (const toolCall of choice.tool_calls) {
-            console.log(`🔧 [OpenRouter] Tool: ${toolCall.function.name}`);
+            console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
             try {
                 const args = JSON.parse(toolCall.function.arguments);
                 const res = await executeTool(toolCall.function.name, args);
