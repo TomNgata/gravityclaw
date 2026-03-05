@@ -21,6 +21,8 @@ export function saveMemory(content: string, category: string = "facts"): number 
  * Returns the most relevant matches for a query.
  */
 export function searchMemories(query: string, limit: number = 5): Memory[] {
+    if (!query || query.trim().length === 0) return [];
+
     // Use FTS5 MATCH for full-text search
     const stmt = db.prepare(`
     SELECT m.* FROM memories m
@@ -30,13 +32,14 @@ export function searchMemories(query: string, limit: number = 5): Memory[] {
     LIMIT ?
   `);
 
-    // Sanitize query for FTS5 by wrapping in quotes to handle special characters
-    const sanitizedQuery = `"${query.replace(/"/g, '""')}"`;
+    // Clean query for FTS5: remove non-alphanumeric chars to avoid syntax errors
+    const cleanedQuery = query.replace(/[^\w\s]/g, ' ').trim();
+    if (!cleanedQuery) return [];
 
     try {
-        return stmt.all(sanitizedQuery, limit) as Memory[];
+        return stmt.all(cleanedQuery, limit) as Memory[];
     } catch (error) {
-        console.error("Search error (likely empty query or syntax):", error);
+        console.error("Search error:", error);
         return [];
     }
 }
