@@ -47,12 +47,15 @@ async function getExpertModel(userMessage: string, history: string): Promise<str
 Analyze the user's message and history to select the best expert model.
 
 EXPERTS:
-1. "qwen/qwen-2.5-coder-32b-instruct:free": Best for coding, scripts, and technical logic.
-2. "meta-llama/llama-3.3-70b-instruct:free": Best for complex reasoning and tool orchestration.
-3. "google/gemini-2.0-flash-lite-preview-02-05:free": Best for fast chat, vision, and general tasks.
+1. "qwen/qwen-2.5-coder-32b-instruct:free": Best for coding, scripting, and technical architecture.
+2. "meta-llama/llama-3.3-70b-instruct:free": Best for complex logic, reasoning, and planning.
+3. "google/gemini-2.0-flash-lite-preview-02-05:free": Best for fast chat, vision (images), and real-time response.
+4. "arcee/trinity-large-preview:free": Best for creative writing, prompt generation, and roleplay.
 
 RULES:
 - Return ONLY the model string.
+- Use "arcee/trinity-large-preview:free" if the user wants creative writing or prompt help.
+- Use "qwen/qwen-2.5-coder-32b-instruct:free" for ANY code-related request.
 - Default to "google/gemini-2.0-flash-lite-preview-02-05:free".`;
 
     try {

@@ -115,6 +115,16 @@ bot.on("message:text", async (ctx) => {
     try {
         const userId = ctx.from!.id;
         const response = await handleMessage(userMessage, userId);
+
+        if (response.includes("https://image.pollinations.ai")) {
+            // Extract URL (simple regex for this tool's specific pattern)
+            const urlMatch = response.match(/https:\/\/image\.pollinations\.ai\/prompt\/[^\s)]+/);
+            if (urlMatch) {
+                await ctx.replyWithPhoto(urlMatch[0], { caption: "✨ Here is your generated image!" });
+                return;
+            }
+        }
+
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
         console.error("Agent error:", error);
