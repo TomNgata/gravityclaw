@@ -70,6 +70,7 @@ bot.on("message:voice", async (ctx) => {
         console.log(`🎤 Voice from ${userId}: ${transcribedText}`);
 
         // 4. Process with Agent
+        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const agentResponse = await handleMessage(transcribedText, userId);
 
         // 5. Respond
@@ -100,6 +101,7 @@ bot.on("message:photo", async (ctx) => {
         console.log(`📸 Photo from ${userId}: ${caption}`);
 
         // 2. Process with Agent (passing the image URL)
+        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const response = await handleMessage(caption, userId, imageUrl);
 
         // 3. Respond
@@ -115,11 +117,14 @@ bot.on("message:text", async (ctx) => {
     const userMessage = ctx.message.text;
     if (!userMessage) return;
 
+    const userId = ctx.from!.id;
+    console.log(`📩 [Bot] Received text from ${userId}: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`);
+
     // Show "typing…" indicator while processing
     await ctx.replyWithChatAction("typing");
 
     try {
-        const userId = ctx.from!.id;
+        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const response = await handleMessage(userMessage, userId);
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
