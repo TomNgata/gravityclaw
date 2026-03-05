@@ -8,16 +8,18 @@ export interface MCPServerConfig {
 
 export interface Config {
     telegramBotToken: string;
-    anthropicApiKey: string;
+    anthropicApiKey?: string;
+    openRouterApiKey?: string;
     allowedUserIds: number[];
     openaiApiKey: string;
     elevenLabsApiKey: string;
     mcpServers: MCPServerConfig[];
+    llmModel: string;
 }
 
-function requireEnv(name: string): string {
+function requireEnv(name: string, required: boolean = true): string | undefined {
     const value = process.env[name];
-    if (!value) {
+    if (!value && required) {
         const allKeys = Object.keys(process.env).join(", ");
         console.error(`❌  Missing required env var: ${name}`);
         console.error(`   Available keys: ${allKeys.length > 500 ? allKeys.substring(0, 500) + "..." : allKeys}`);
@@ -28,9 +30,10 @@ function requireEnv(name: string): string {
 }
 
 export const config: Config = {
-    telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN"),
-    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY"),
-    allowedUserIds: requireEnv("ALLOWED_USER_IDS")
+    telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN")!,
+    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY", false),
+    openRouterApiKey: requireEnv("OPENROUTER_API_KEY", false),
+    allowedUserIds: requireEnv("ALLOWED_USER_IDS")!
         .split(",")
         .map((id) => {
             const parsed = parseInt(id.trim(), 10);
@@ -40,7 +43,8 @@ export const config: Config = {
             }
             return parsed;
         }),
-    openaiApiKey: requireEnv("OPENAI_API_KEY"),
-    elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY"),
+    openaiApiKey: requireEnv("OPENAI_API_KEY")!,
+    elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY")!,
     mcpServers: process.env.MCP_SERVERS ? JSON.parse(process.env.MCP_SERVERS) : [],
+    llmModel: process.env.LLM_MODEL || "claude-3-5-sonnet-20240620",
 };

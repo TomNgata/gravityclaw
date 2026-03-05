@@ -30,8 +30,11 @@ export function searchMemories(query: string, limit: number = 5): Memory[] {
     LIMIT ?
   `);
 
+    // Sanitize query for FTS5 by wrapping in quotes to handle special characters
+    const sanitizedQuery = `"${query.replace(/"/g, '""')}"`;
+
     try {
-        return stmt.all(query, limit) as Memory[];
+        return stmt.all(sanitizedQuery, limit) as Memory[];
     } catch (error) {
         console.error("Search error (likely empty query or syntax):", error);
         return [];
