@@ -12,7 +12,7 @@ async function main() {
         bot.start({
             onStart: (info) => {
                 console.log(`🤖 Gravity Claw is online as @${info.username}`);
-                console.log(`🚀 Level 5 (MCP Core) Active`);
+                console.log(`🚀 Level 7 (Optimized Swarm V2) Active`);
             },
         });
     } catch (error) {

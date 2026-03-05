@@ -16,7 +16,7 @@ export const bot = new Bot(config.telegramBotToken);
 bot.use(async (ctx: Context, next) => {
     const userId = ctx.from?.id;
     if (!userId || !config.allowedUserIds.includes(userId)) {
-        // Silently ignore non-whitelisted users — no response, no logging of content
+        console.warn(`🔒 Access Denied for User ID: ${userId}`);
         return;
     }
     await next();
