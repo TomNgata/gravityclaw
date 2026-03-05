@@ -48,19 +48,19 @@ async function getExpertModel(userMessage: string, history: string): Promise<str
 Analyze the user's message and history to select the best expert model.
 
 EXPERTS:
-1. "qwen/qwen-3-coder-480b-a35b:free": Best for coding, scripting, and technical architecture.
-2. "z-ai/glm-4-5-air:free": Best for multi-step planning, tool use, and system tasks.
+1. "qwen/qwen3-coder:free": Best for coding, scripting, and technical architecture.
+2. "z-ai/glm-4.5-air:free": Best for multi-step planning, tool use, and system tasks.
 3. "openai/gpt-oss-120b:free": Best for complex logic, math, and graduate-level reasoning.
 4. "google/gemma-3-12b:free": Best for vision, image analysis, and fast chat.
 
 RULES:
 - Return ONLY the model string.
 - Default to "google/gemma-3-12b:free" for general chat.
-- Always pick "qwen/qwen-3-coder-480b-a35b:free" for software work.`;
+- Always pick "qwen/qwen3-coder:free" for software work.`;
 
     try {
         const response = await openrouter.chat.completions.create({
-            model: "stepfun/step-3-5-flash:free",
+            model: "stepfun/step-3.5-flash:free",
             messages: [{ role: "user", content: routerPrompt }],
             max_tokens: 50,
         });
