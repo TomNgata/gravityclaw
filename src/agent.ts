@@ -163,7 +163,16 @@ async function handleOpenRouter(
             response = await openrouter.chat.completions.create(requestPayload);
             
         } catch (error: any) {
-            // If we hit a tool error or system prompt error, attempt to fallback to plain qwen-coder without tools
+            // Handle Rate Limit globally (OpenRouter frequently rate-limits the free Gemma endpoints)
+            if (error.status === 429) {
+                console.warn(`⚠️ [OpenRouter] Model ${model} is rate-limited (429). Failing over to qwen-coder.`);
+                model = "qwen/qwen-3-480b-coder-it:free";
+                useTools = false; // Drop tools to be safe on failover
+                i--; // Retry
+                continue;
+            }
+            
+            // Handle Tool/SystemPrompt rejections
             if (error.status === 404 || error.message?.includes("tool") || error.status === 400) {
                 console.warn(`⚠️ [OpenRouter] Model ${model} crashed. Falling back to simple chat text routing.`);
                 if (useTools) {
@@ -172,6 +181,7 @@ async function handleOpenRouter(
                     continue;
                 }
             }
+            
             console.error(`💥 [OpenRouter] Critical API Error:`, error);
             return `System Error: The assigned expert model (${model}) failed. Please try again.`;
         }
