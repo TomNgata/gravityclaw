@@ -120,16 +120,40 @@ async function handleOpenRouter(
 
     console.log(`🚀 [OpenRouter] Dispatching to expert: ${model}`);
     let finalResponse = "";
+    
+    // We start by assuming the model supports tools
+    let useTools = true;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-        const response = await openrouter.chat.completions.create({
-            model: model,
-            messages,
-            tools: toolDefinitions.map(t => ({
-                type: "function",
-                function: { name: t.name, description: t.description, parameters: t.input_schema }
-            })) as any,
-        });
+        let response;
+        try {
+            const requestPayload: any = {
+                model: model,
+                messages,
+            };
+            
+            // Only attach tools if the flag is true
+            if (useTools && toolDefinitions.length > 0) {
+                requestPayload.tools = toolDefinitions.map(t => ({
+                    type: "function",
+                    function: { name: t.name, description: t.description, parameters: t.input_schema }
+                }));
+            }
+
+            response = await openrouter.chat.completions.create(requestPayload);
+            
+        } catch (error: any) {
+            // OpenRouter throws 404/400 if a specific model endpoint doesn't support structured tool use.
+            // If we hit this, gracefully fall back to a standard chat without tools.
+            if (useTools && (error.status === 404 || error.message?.includes("tool") || error.message?.includes("function"))) {
+                console.warn(`⚠️ [OpenRouter] Model ${model} rejected tools. Falling back to plain chat.`);
+                useTools = false; // Disable tools
+                i--; // Retry this iteration without tools
+                continue;
+            }
+            console.error(`💥 [OpenRouter] Critical API Error:`, error);
+            return `System Error: The assigned expert model (${model}) failed. Please try again.`;
+        }
 
         const choice = response.choices[0].message;
 
