@@ -2,6 +2,8 @@ import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
 import { searchMemories, logConversation, getRecentHistory } from "./memory/manager.js";
+import fs from "fs/promises";
+import path from "path";
 
 // ── LLM clients ──────────────────────────────────────────────────────
 const openrouter = new OpenAI({
@@ -13,60 +15,69 @@ const openrouter = new OpenAI({
     }
 });
 
-const SYSTEM_PROMPT = `You are Gravity Claw, a sophisticated multi-model agentic swarm. 
-Current Version: Level 7 (Optimized Swarm V2).
+/**
+ * Load personality files dynamically to separate data from logic
+ * (Rich Hickey architecture: externalizing state/identity from code)
+ */
+async function loadPersonality(): Promise<string> {
+    try {
+        const soul = await fs.readFile(path.resolve(process.cwd(), "soul.md"), "utf-8").catch(() => "");
+        const identity = await fs.readFile(path.resolve(process.cwd(), "identity.md"), "utf-8").catch(() => "");
+        const personality = await fs.readFile(path.resolve(process.cwd(), "personality.md"), "utf-8").catch(() => "");
+        
+        const combined = `${soul}\n\n${identity}\n\n${personality}`.trim();
+        return combined || "You are Gravity Claw, a sophisticated multi-model agentic swarm.";
+    } catch (e) {
+        return "You are Gravity Claw, a sophisticated multi-model agentic swarm.";
+    }
+}
 
-ORCHESTRATION ARCHITECTURE:
-- **Router**: StepFun 3.5 Flash (Fast/Broad Context).
-- **Expert (Code)**: Qwen3 Coder 480B (Top-tier engineering).
-- **Expert (Agentic/Tools)**: GLM 4.5 Air (Logic-first tool orchestration).
-- **Expert (Reasoning)**: GPT-OSS 120B (High-IQ logic).
-- **Expert (Vision/Chat)**: Gemma 3 12B (General chat).
+const ORCHESTRATOR_PROMPT = `You are the Gravity Claw Orchestrator. 
+Analyze the user's message and history to select the best expert models.
 
-SUPERPOWERS:
-- SQLite/FTS5 Memory.
-- Voice (STT/TTS) & Vision.
-- System Access (Shell/FS).
-- MCP Bridge (External Tools).
+EXPERTS:
+1. "qwen/qwen-2.5-coder-32b-instruct:free" -> STRICTLY ALWAYS pick this if the request involves coding, scripting, scraping, languages like Python/JS, or terminal commands.
+2. "meta-llama/llama-3.3-70b-instruct:free" -> Best for complex logic, multi-step planning, tool use, memory recall, and system tasks.
+3. "google/gemma-3-12b-it:free" -> ONLY use for simple short conversational replies or greetings. NEVER use for coding or scripting.
 
-You are currently acting as one of these experts. Use your specialized strengths to fulfill the user's request.
-`;
+CRITICAL INSTRUCTION: Since free endpoints frequently experience rate limits (429) or downtime, you MUST return a JSON array of exactly 3 ranked model strings, from best fit to worst fit. The swarm will fallback through this list.
+For example, if it's a coding task, return:
+["qwen/qwen-2.5-coder-32b-instruct:free", "meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-12b-it:free"]
+
+Return ONLY the valid JSON array. Do not include markdown blocks or any other text.`;
 
 const MAX_ITERATIONS = 10;
 
 /**
  * The "Orchestrator" Router.
- * Uses a fast model (StepFun) to decide which expert brain is best for the task.
+ * Returns an array of ranked models to loop through for fault tolerance.
  */
-async function getExpertModel(userMessage: string, history: string): Promise<string> {
-    const routerPrompt = `You are the Gravity Claw Orchestrator. 
-Analyze the user's message and history to select the best expert model.
-
-EXPERTS:
-1. "qwen/qwen-3-480b-coder-it:free" -> STRICTLY ALWAYS pick this if the request involves coding, scripting, scraping, languages like Python/JS, or terminal commands.
-2. "z-ai/glm-4.5-air:free" -> Best for multi-step planning, tool use, memory recall, and system tasks.
-3. "openai/gpt-oss-120b:free" -> Best for complex logic, math, riddles, and graduate-level reasoning.
-4. "google/gemma-3-12b-it:free" -> ONLY use for simple short conversational replies or greetings. NEVER use for coding or scripting.
-
-CRITICAL INSTRUCTION: If the user says "scrape a website", "write python", "debug", or mentions any programming task, you MUST select qwen-3-480b-coder.
-
-RULES:
-- Return ONLY the exact model string (e.g. "qwen/qwen-3-480b-coder-it:free"). Do not include any other text.`;
-
+async function getExpertModels(userMessage: string, history: string): Promise<string[]> {
     try {
         const response = await openrouter.chat.completions.create({
             model: "stepfun/step-3.5-flash:free",
-            messages: [{ role: "user", content: routerPrompt }],
-            max_tokens: 50,
+            messages: [{ role: "user", content: ORCHESTRATOR_PROMPT + `\n\nUser: ${userMessage}` }],
+            max_tokens: 150,
         });
-        const rawContent = response.choices[0].message.content?.trim() || "google/gemma-3-12b-it:free";
-        const selection = rawContent.replace(/^["']|["']$/g, ''); // Strip quotes
-        console.log(`🧠 Orchestrator: Directed to ${selection}`);
-        return selection;
+        
+        let rawContent = response.choices[0].message.content?.trim() || "";
+        rawContent = rawContent.replace(/```json/g, "").replace(/```/g, "").trim();
+        
+        const models = JSON.parse(rawContent);
+        if (Array.isArray(models) && models.length > 0) {
+            console.log(`🧠 Orchestrator Ranked:`, models);
+            return models;
+        }
     } catch (e) {
-        console.error("Router error, using default free model:", e);
-        return "qwen/qwen-3-480b-coder-it:free";
+        console.warn("Router error or invalid JSON, using default fallback queue:", e);
     }
+    
+    // Default reliable fallback queue
+    return [
+        "qwen/qwen-2.5-coder-32b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free", 
+        "google/gemma-3-12b-it:free"
+    ];
 }
 
 /**
@@ -82,13 +93,16 @@ export async function handleMessage(
     const history = getRecentHistory(userId, 10);
     const historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
 
-    // 2. Orchestration
-    console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-    let expertModel = await getExpertModel(userMessage, historyText);
+    // 2. Load dynamic personality
+    const basePersonality = await loadPersonality();
 
-    // Failsafe for incorrect orchestration output
-    if (!expertModel.includes("/") || expertModel.includes(" ")) {
-        expertModel = "qwen/qwen-3-480b-coder-it:free";
+    // 3. Orchestration
+    console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
+    let expertModels = await getExpertModels(userMessage, historyText);
+
+    // Failsafe guarantees it's an array
+    if (!Array.isArray(expertModels) || expertModels.length === 0) {
+        expertModels = ["qwen/qwen-2.5-coder-32b-instruct:free", "meta-llama/llama-3.3-70b-instruct:free"];
     }
 
     const memoryContext = memories.length > 0
@@ -99,118 +113,117 @@ export async function handleMessage(
         ? `\n\nRECENT CONVERSATION:\n${historyText}`
         : "";
 
-    const fullSystemPrompt = `${SYSTEM_PROMPT}${memoryContext}${historyContext}\n\nYou are currently operating as the ${expertModel} expert.`;
+    const fullSystemPrompt = `${basePersonality}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. Follow the user's instructions.`;
 
-    // 3. Dispatch
-    return handleOpenRouter(userMessage, userId, fullSystemPrompt, expertModel, imageUrl);
+    // 4. Dispatch with Fallback Loop
+    return handleOpenRouterFallback(userMessage, userId, fullSystemPrompt, expertModels, imageUrl);
 }
 
-async function handleOpenRouter(
+async function handleOpenRouterFallback(
     userMessage: string,
     userId: number,
     systemPrompt: string,
-    model: string,
+    models: string[],
     imageUrl?: string
 ): Promise<string> {
     
-    // Google Gemma-3 explicitly disallows "system" role messages via OpenRouter free tier ("Developer instruction is not enabled")
-    const isGemma = model.includes("gemma");
-    
-    const messages: any[] = [];
-    
-    if (isGemma) {
-        // Embed system prompt inside the first user message for Gemma
-        messages.push({
-            role: "user", content: `[SYSTEM CONTEXT]\n${systemPrompt}\n\n[USER REQUEST]\n` + (imageUrl ? "Please analyze the attached image along with this request: " : "") + userMessage
-        });
-        if (imageUrl) {
-            messages[0].content = [
-                { type: "text", text: messages[0].content },
-                { type: "image_url", image_url: { url: imageUrl } }
-            ];
+    // Iterate through the ranked queue of models
+    for (let modelIndex = 0; modelIndex < models.length; modelIndex++) {
+        let model = models[modelIndex];
+        console.log(`🚀 [OpenRouter] Attempting dispatch to expert: ${model} (Rank ${modelIndex + 1}/${models.length})`);
+        
+        // Google Gemma-3 explicitly disallows "system" role messages via OpenRouter free tier
+        const isGemma = model.includes("gemma");
+        const messages: any[] = [];
+        
+        if (isGemma) {
+            messages.push({
+                role: "user", content: `[SYSTEM CONTEXT]\n${systemPrompt}\n\n[USER REQUEST]\n` + (imageUrl ? "Please analyze the attached image along with this request: " : "") + userMessage
+            });
+            if (imageUrl) {
+                messages[0].content = [
+                    { type: "text", text: messages[0].content },
+                    { type: "image_url", image_url: { url: imageUrl } }
+                ];
+            }
+        } else {
+            messages.push({ role: "system", content: systemPrompt });
+            messages.push({
+                role: "user", content: imageUrl ? [
+                    { type: "text", text: userMessage },
+                    { type: "image_url", image_url: { url: imageUrl } }
+                ] : userMessage
+            });
         }
-    } else {
-        messages.push({ role: "system", content: systemPrompt });
-        messages.push({
-            role: "user", content: imageUrl ? [
-                { type: "text", text: userMessage },
-                { type: "image_url", image_url: { url: imageUrl } }
-            ] : userMessage
-        });
-    }
 
-    console.log(`🚀 [OpenRouter] Dispatching to expert: ${model}`);
-    let finalResponse = "";
-    
-    // Gemma free endpoints generally do not support tools on OpenRouter right now
-    let useTools = !isGemma && toolDefinitions.length > 0;
-
-    for (let i = 0; i < MAX_ITERATIONS; i++) {
-        let response;
-        try {
-            const requestPayload: any = {
-                model: model,
-                messages,
-            };
-            
-            if (useTools) {
-                requestPayload.tools = toolDefinitions.map(t => ({
-                    type: "function",
-                    function: { name: t.name, description: t.description, parameters: t.input_schema }
-                }));
-            }
-
-            response = await openrouter.chat.completions.create(requestPayload);
-            
-        } catch (error: any) {
-            // Handle Rate Limit globally (OpenRouter frequently rate-limits the free Gemma endpoints)
-            if (error.status === 429) {
-                console.warn(`⚠️ [OpenRouter] Model ${model} is rate-limited (429). Failing over to qwen-coder.`);
-                model = "qwen/qwen-3-480b-coder-it:free";
-                useTools = false; // Drop tools to be safe on failover
-                i--; // Retry
-                continue;
-            }
-            
-            // Handle Tool/SystemPrompt rejections
-            if (error.status === 404 || error.message?.includes("tool") || error.status === 400) {
-                console.warn(`⚠️ [OpenRouter] Model ${model} crashed. Falling back to simple chat text routing.`);
+        let finalResponse = "";
+        let useTools = !isGemma && toolDefinitions.length > 0;
+        let modelSucceeded = false;
+        
+        for (let i = 0; i < MAX_ITERATIONS; i++) {
+            let response;
+            try {
+                const requestPayload: any = { model: model, messages };
+                
                 if (useTools) {
-                    useTools = false; // Disable tools
-                    i--; // Retry this iteration without tools
-                    continue;
+                    requestPayload.tools = toolDefinitions.map(t => ({
+                        type: "function",
+                        function: { name: t.name, description: t.description, parameters: t.input_schema }
+                    }));
+                }
+
+                response = await openrouter.chat.completions.create(requestPayload);
+                modelSucceeded = true; 
+                
+            } catch (error: any) {
+                const isToolOrSystemRejection = error.status === 404 || error.message?.includes("tool") || error.status === 400;
+                
+                if (isToolOrSystemRejection && useTools) {
+                    console.warn(`⚠️ [OpenRouter] Model ${model} crashed on tool calling. Retrying without tools.`);
+                    useTools = false; 
+                    i--; 
+                    continue; 
+                }
+                
+                console.error(`💥 [OpenRouter] Model ${model} failed entirely (Error ${error.status}). Proceeding to next fallback model...`);
+                modelSucceeded = false;
+                break; // Break inner loop to trigger fallback to next model in queue
+            }
+
+            const choice = response.choices[0].message;
+
+            if (!choice.tool_calls || choice.tool_calls.length === 0) {
+                finalResponse = choice.content || "(No response)";
+                break;
+            }
+
+            messages.push(choice);
+
+            for (const toolCall of choice.tool_calls) {
+                console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
+                try {
+                    const args = JSON.parse(toolCall.function.arguments);
+                    const res = await executeTool(toolCall.function.name, args);
+                    messages.push({
+                        role: "tool",
+                        tool_call_id: toolCall.id,
+                        content: typeof res === "string" ? res : JSON.stringify(res),
+                    });
+                } catch (e) {
+                    messages.push({ role: "tool", tool_call_id: toolCall.id, content: `Error: ${e}` });
                 }
             }
-            
-            console.error(`💥 [OpenRouter] Critical API Error:`, error);
-            return `System Error: The assigned expert model (${model}) failed. Please try again.`;
         }
-
-        const choice = response.choices[0].message;
-
-        if (!choice.tool_calls || choice.tool_calls.length === 0) {
-            finalResponse = choice.content || "(No response)";
-            break;
-        }
-
-        messages.push(choice);
-
-        for (const toolCall of choice.tool_calls) {
-            console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
-            try {
-                const args = JSON.parse(toolCall.function.arguments);
-                const res = await executeTool(toolCall.function.name, args);
-                messages.push({
-                    role: "tool",
-                    tool_call_id: toolCall.id,
-                    content: typeof res === "string" ? res : JSON.stringify(res),
-                });
-            } catch (e) {
-                messages.push({ role: "tool", tool_call_id: toolCall.id, content: `Error: ${e}` });
-            }
+        
+        // If the deployment was successful and we got a response, return it (breaking the fallback loop)
+        if (modelSucceeded && finalResponse) {
+            logConversation(userId, userMessage, finalResponse);
+            return finalResponse;
         }
     }
 
-    logConversation(userId, userMessage, finalResponse || "⚠️ Max iterations reached.");
-    return finalResponse || "⚠️ Max iterations reached.";
+    // Exhausted all models
+    const fallbackMsg = "⚠️ System Error: All assigned expert models failed in the queue (likely rate limits). Please try again later.";
+    logConversation(userId, userMessage, fallbackMsg);
+    return fallbackMsg;
 }
