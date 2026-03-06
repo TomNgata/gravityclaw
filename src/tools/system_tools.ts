@@ -2,12 +2,12 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { readFile, writeFile } from "fs/promises";
 import { resolve } from "path";
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ToolDefinition } from "./index.js";
 
 const execAsync = promisify(exec);
 
 // ── Execute Shell ──────────────────────────────────────────────────────
-export const executeShellDef: Anthropic.Tool = {
+export const executeShellDef: ToolDefinition = {
     name: "execute_shell",
     description: "Executes a shell command in the local terminal. Use for git, npm, file management, etc.",
     input_schema: {
@@ -33,7 +33,7 @@ export async function executeShellExec(input: Record<string, unknown>): Promise<
 }
 
 // ── Read File ──────────────────────────────────────────────────────────
-export const readFileSystemDef: Anthropic.Tool = {
+export const readFileSystemDef: ToolDefinition = {
     name: "read_file",
     description: "Reads the content of a file from the file system.",
     input_schema: {
@@ -56,7 +56,7 @@ export async function readFileSystemExec(input: Record<string, unknown>): Promis
 }
 
 // ── Write File ─────────────────────────────────────────────────────────
-export const writeFileSystemDef: Anthropic.Tool = {
+export const writeFileSystemDef: ToolDefinition = {
     name: "write_file",
     description: "Writes or updates a file in the file system.",
     input_schema: {

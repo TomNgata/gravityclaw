@@ -1,4 +1,9 @@
-import type Anthropic from "@anthropic-ai/sdk";
+export interface ToolDefinition {
+    name: string;
+    description: string;
+    input_schema: any;
+}
+
 import {
     definition as getCurrentTimeDef,
     execute as getCurrentTimeExec,
@@ -32,7 +37,7 @@ const internalExecutors: Record<string, (input: Record<string, unknown>) => unkn
 };
 
 // ── State ──────────────────────────────────────────────────────────
-export let toolDefinitions: Anthropic.Tool[] = [
+export let toolDefinitions: ToolDefinition[] = [
     getCurrentTimeDef,
     storeMemoryDef,
     recallMemoryDef,

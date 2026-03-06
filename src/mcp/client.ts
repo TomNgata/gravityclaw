@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import { JSONRPCClient } from "json-rpc-2.0";
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ToolDefinition } from "../tools/index.js";
 
 export interface MCPServerConfig {
     name: string;
@@ -48,7 +48,7 @@ export class MCPClient {
         await this.client.notify("notifications/initialized", {});
     }
 
-    async listTools(): Promise<Anthropic.Tool[]> {
+    async listTools(): Promise<ToolDefinition[]> {
         const response = await this.client.request("tools/list", {});
         return response.tools.map((tool: any) => ({
             name: `${this.config.name}__${tool.name}`,
