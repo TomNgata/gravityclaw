@@ -2,7 +2,6 @@ import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
 import { searchMemories, logConversation, getRecentHistory } from "./memory/manager.js";
-import axios from "axios";
 
 // ── LLM clients ──────────────────────────────────────────────────────
 const openrouter = new OpenAI({
@@ -22,7 +21,7 @@ ORCHESTRATION ARCHITECTURE:
 - **Expert (Code)**: Qwen3 Coder 480B (Top-tier engineering).
 - **Expert (Agentic/Tools)**: GLM 4.5 Air (Logic-first tool orchestration).
 - **Expert (Reasoning)**: GPT-OSS 120B (High-IQ logic).
-- **Expert (Vision)**: Gemma 3 12B (Multimodal vision).
+- **Expert (Vision/Chat)**: Gemma 3 12B (General chat).
 
 SUPERPOWERS:
 - SQLite/FTS5 Memory.
@@ -44,15 +43,15 @@ async function getExpertModel(userMessage: string, history: string): Promise<str
 Analyze the user's message and history to select the best expert model.
 
 EXPERTS:
-1. "qwen/qwen-3-480b-coder-it:free": Best for coding, scripting, and technical architecture.
-2. "z-ai/glm-4.5-air:free": Best for multi-step planning, tool use, and system tasks.
-3. "openai/gpt-oss-120b:free": Best for complex logic, math, and graduate-level reasoning.
-4. "google/gemma-3-12b-it:free": Best for vision, image analysis, and fast chat.
+1. "qwen/qwen-3-480b-coder-it:free" -> STRICTLY ALWAYS pick this if the request involves coding, scripting, scraping, languages like Python/JS, or terminal commands.
+2. "z-ai/glm-4.5-air:free" -> Best for multi-step planning, tool use, memory recall, and system tasks.
+3. "openai/gpt-oss-120b:free" -> Best for complex logic, math, riddles, and graduate-level reasoning.
+4. "google/gemma-3-12b-it:free" -> ONLY use for simple short conversational replies or greetings. NEVER use for coding or scripting.
+
+CRITICAL INSTRUCTION: If the user says "scrape a website", "write python", "debug", or mentions any programming task, you MUST select qwen-3-480b-coder.
 
 RULES:
-- Return ONLY the model string.
-- Default to "google/gemma-3-12b-it:free" for general chat.
-- Always pick "qwen/qwen-3-480b-coder-it:free" for software work.`;
+- Return ONLY the exact model string (e.g. "qwen/qwen-3-480b-coder-it:free"). Do not include any other text.`;
 
     try {
         const response = await openrouter.chat.completions.create({
@@ -66,7 +65,7 @@ RULES:
         return selection;
     } catch (e) {
         console.error("Router error, using default free model:", e);
-        return "google/gemma-3-12b-it:free";
+        return "qwen/qwen-3-480b-coder-it:free";
     }
 }
 
@@ -85,7 +84,12 @@ export async function handleMessage(
 
     // 2. Orchestration
     console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-    const expertModel = await getExpertModel(userMessage, historyText);
+    let expertModel = await getExpertModel(userMessage, historyText);
+
+    // Failsafe for incorrect orchestration output
+    if (!expertModel.includes("/") || expertModel.includes(" ")) {
+        expertModel = "qwen/qwen-3-480b-coder-it:free";
+    }
 
     const memoryContext = memories.length > 0
         ? `\n\nRELEVANT MEMORIES:\n${memories.map(m => `- ${m.content}`).join("\n")}`
@@ -108,21 +112,38 @@ async function handleOpenRouter(
     model: string,
     imageUrl?: string
 ): Promise<string> {
-    const messages: any[] = [
-        { role: "system", content: systemPrompt },
-        {
+    
+    // Google Gemma-3 explicitly disallows "system" role messages via OpenRouter free tier ("Developer instruction is not enabled")
+    const isGemma = model.includes("gemma");
+    
+    const messages: any[] = [];
+    
+    if (isGemma) {
+        // Embed system prompt inside the first user message for Gemma
+        messages.push({
+            role: "user", content: `[SYSTEM CONTEXT]\n${systemPrompt}\n\n[USER REQUEST]\n` + (imageUrl ? "Please analyze the attached image along with this request: " : "") + userMessage
+        });
+        if (imageUrl) {
+            messages[0].content = [
+                { type: "text", text: messages[0].content },
+                { type: "image_url", image_url: { url: imageUrl } }
+            ];
+        }
+    } else {
+        messages.push({ role: "system", content: systemPrompt });
+        messages.push({
             role: "user", content: imageUrl ? [
                 { type: "text", text: userMessage },
                 { type: "image_url", image_url: { url: imageUrl } }
             ] : userMessage
-        }
-    ];
+        });
+    }
 
     console.log(`🚀 [OpenRouter] Dispatching to expert: ${model}`);
     let finalResponse = "";
     
-    // We start by assuming the model supports tools
-    let useTools = true;
+    // Gemma free endpoints generally do not support tools on OpenRouter right now
+    let useTools = !isGemma && toolDefinitions.length > 0;
 
     for (let i = 0; i < MAX_ITERATIONS; i++) {
         let response;
@@ -132,8 +153,7 @@ async function handleOpenRouter(
                 messages,
             };
             
-            // Only attach tools if the flag is true
-            if (useTools && toolDefinitions.length > 0) {
+            if (useTools) {
                 requestPayload.tools = toolDefinitions.map(t => ({
                     type: "function",
                     function: { name: t.name, description: t.description, parameters: t.input_schema }
@@ -143,13 +163,14 @@ async function handleOpenRouter(
             response = await openrouter.chat.completions.create(requestPayload);
             
         } catch (error: any) {
-            // OpenRouter throws 404/400 if a specific model endpoint doesn't support structured tool use.
-            // If we hit this, gracefully fall back to a standard chat without tools.
-            if (useTools && (error.status === 404 || error.message?.includes("tool") || error.message?.includes("function"))) {
-                console.warn(`⚠️ [OpenRouter] Model ${model} rejected tools. Falling back to plain chat.`);
-                useTools = false; // Disable tools
-                i--; // Retry this iteration without tools
-                continue;
+            // If we hit a tool error or system prompt error, attempt to fallback to plain qwen-coder without tools
+            if (error.status === 404 || error.message?.includes("tool") || error.status === 400) {
+                console.warn(`⚠️ [OpenRouter] Model ${model} crashed. Falling back to simple chat text routing.`);
+                if (useTools) {
+                    useTools = false; // Disable tools
+                    i--; // Retry this iteration without tools
+                    continue;
+                }
             }
             console.error(`💥 [OpenRouter] Critical API Error:`, error);
             return `System Error: The assigned expert model (${model}) failed. Please try again.`;
