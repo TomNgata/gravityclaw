@@ -13,7 +13,7 @@ async function start(attempt: number = 1): Promise<void> {
         await bot.start({
             onStart: (info) => {
                 console.log(`🤖 Gravity Claw is online as @${info.username}`);
-                console.log(`🚀 Level 7 (Optimized Swarm V2) Active`);
+                console.log(`🚀 Level 8 (Optimized Swarm V3) Active`);
             },
         });
     } catch (error: any) {
