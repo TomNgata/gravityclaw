@@ -36,13 +36,15 @@ const ORCHESTRATOR_PROMPT = `You are the Gravity Claw Orchestrator.
 Analyze the user's message and history to select the best expert models.
 
 EXPERTS:
-1. "qwen/qwen-2.5-coder-32b-instruct:free" -> STRICTLY ALWAYS pick this if the request involves coding, scripting, scraping, languages like Python/JS, or terminal commands.
-2. "meta-llama/llama-3.3-70b-instruct:free" -> Best for complex logic, multi-step planning, tool use, memory recall, and system tasks.
-3. "google/gemma-3-12b-it:free" -> ONLY use for simple short conversational replies or greetings. NEVER use for coding or scripting.
+1. "qwen/qwen3-coder:free": Best for coding, scripting, and technical architecture.
+2. "meta-llama/llama-3.3-70b-instruct:free": Best for complex logic, math, and graduate-level reasoning.
+3. "openai/gpt-oss-120b:free": Best for large-scale reasoning and deep knowledge.
+4. "stepfun/step-3.5-flash:free": Best for agentic tool use, planning, and fast response.
+5. "liquid/lfm-2.5-1.2b-thinking:free": Best for deep thinking and complex multi-step reasoning.
 
 CRITICAL INSTRUCTION: Since free endpoints frequently experience rate limits (429) or downtime, you MUST return a JSON array of exactly 3 ranked model strings, from best fit to worst fit. The swarm will fallback through this list.
 For example, if it's a coding task, return:
-["qwen/qwen-2.5-coder-32b-instruct:free", "meta-llama/llama-3.3-70b-instruct:free", "google/gemma-3-12b-it:free"]
+["qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free"]
 
 Return ONLY the valid JSON array. Do not include markdown blocks or any other text.`;
 
@@ -74,9 +76,9 @@ async function getExpertModels(userMessage: string, history: string): Promise<st
     
     // Default reliable fallback queue
     return [
-        "qwen/qwen-2.5-coder-32b-instruct:free",
-        "meta-llama/llama-3.3-70b-instruct:free", 
-        "google/gemma-3-12b-it:free"
+        "stepfun/step-3.5-flash:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "openai/gpt-oss-20b:free"
     ];
 }
 
@@ -102,7 +104,7 @@ export async function handleMessage(
 
     // Failsafe guarantees it's an array
     if (!Array.isArray(expertModels) || expertModels.length === 0) {
-        expertModels = ["qwen/qwen-2.5-coder-32b-instruct:free", "meta-llama/llama-3.3-70b-instruct:free"];
+        expertModels = ["stepfun/step-3.5-flash:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free"];
     }
 
     const memoryContext = memories.length > 0
@@ -113,7 +115,7 @@ export async function handleMessage(
         ? `\n\nRECENT CONVERSATION:\n${historyText}`
         : "";
 
-    const fullSystemPrompt = `${basePersonality}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. Follow the user's instructions.`;
+    const fullSystemPrompt = `${basePersonality}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
 
     // 4. Dispatch with Fallback Loop
     return handleOpenRouterFallback(userMessage, userId, fullSystemPrompt, expertModels, imageUrl);
@@ -133,6 +135,7 @@ async function handleOpenRouterFallback(
         console.log(`🚀 [OpenRouter] Attempting dispatch to expert: ${model} (Rank ${modelIndex + 1}/${models.length})`);
         
         // Google Gemma-3 explicitly disallows "system" role messages via OpenRouter free tier
+        // Note: The user didn't request Gemma-3 in the latest list, but we keep the logic for safety
         const isGemma = model.includes("gemma");
         const messages: any[] = [];
         
@@ -142,7 +145,7 @@ async function handleOpenRouterFallback(
             });
             if (imageUrl) {
                 messages[0].content = [
-                    { type: "text", text: messages[0].content },
+                    { type: "text", text: (messages[0].content as string) },
                     { type: "image_url", image_url: { url: imageUrl } }
                 ];
             }
@@ -173,7 +176,30 @@ async function handleOpenRouterFallback(
                 }
 
                 response = await openrouter.chat.completions.create(requestPayload);
+                const choice = response.choices[0].message;
                 modelSucceeded = true; 
+
+                if (!choice.tool_calls || choice.tool_calls.length === 0) {
+                    finalResponse = choice.content || "(No response)";
+                    break;
+                }
+
+                messages.push(choice);
+
+                for (const toolCall of choice.tool_calls) {
+                    console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
+                    try {
+                        const args = JSON.parse(toolCall.function.arguments);
+                        const res = await executeTool(toolCall.function.name, args);
+                        messages.push({
+                            role: "tool",
+                            tool_call_id: toolCall.id,
+                            content: typeof res === "string" ? res : JSON.stringify(res),
+                        });
+                    } catch (e) {
+                        messages.push({ role: "tool", tool_call_id: toolCall.id, content: `Error: ${e}` });
+                    }
+                }
                 
             } catch (error: any) {
                 const isToolOrSystemRejection = error.status === 404 || error.message?.includes("tool") || error.status === 400;
@@ -185,33 +211,9 @@ async function handleOpenRouterFallback(
                     continue; 
                 }
                 
-                console.error(`💥 [OpenRouter] Model ${model} failed entirely (Error ${error.status}). Proceeding to next fallback model...`);
+                console.error(`💥 [OpenRouter] Model ${model} failed entirely (Error ${error.status || error.message}). Proceeding to next fallback model...`);
                 modelSucceeded = false;
                 break; // Break inner loop to trigger fallback to next model in queue
-            }
-
-            const choice = response.choices[0].message;
-
-            if (!choice.tool_calls || choice.tool_calls.length === 0) {
-                finalResponse = choice.content || "(No response)";
-                break;
-            }
-
-            messages.push(choice);
-
-            for (const toolCall of choice.tool_calls) {
-                console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
-                try {
-                    const args = JSON.parse(toolCall.function.arguments);
-                    const res = await executeTool(toolCall.function.name, args);
-                    messages.push({
-                        role: "tool",
-                        tool_call_id: toolCall.id,
-                        content: typeof res === "string" ? res : JSON.stringify(res),
-                    });
-                } catch (e) {
-                    messages.push({ role: "tool", tool_call_id: toolCall.id, content: `Error: ${e}` });
-                }
             }
         }
         

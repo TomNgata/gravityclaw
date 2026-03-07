@@ -24,14 +24,14 @@ bot.use(async (ctx: Context, next) => {
 // ── Handle /start command ──────────────────────────────────────────────
 bot.command("start", async (ctx) => {
     const welcome = `🤖 **Gravity Claw Online**
-Version: Level 7 (Optimized Swarm V2)
+Version: Level 8 (Optimized Swarm V3)
 
-I am now a multi-model agentic swarm, dynamically routing your requests to specialized experts:
-- 🧠 **Strategy/Logic**: GPT-OSS 120B (Free)
-- 💻 **Engineering**: Qwen3 Coder 480B (Free)
-- 🔧 **Agentic/Tools**: GLM 4.5 Air (Free)
-- 👁️ **Vision/Chat**: Gemma 3 12B (Free)
-- ⚡ **Router**: StepFun 3.5 Flash (Free)
+I am now a more resilient multi-model agentic swarm, dynamically routing your requests to specialized experts:
+- 🧠 **Strategy/Logic**: GPT-OSS 120B / Llama 3.3 70B
+- 💻 **Engineering**: Qwen 3 Coder
+- 🔧 **Agentic/Tools**: StepFun 3.5 Flash (Optimized)
+- 🧠 **Thinking**: Liquid LFM 2.5
+- ⚡ **Router**: StepFun 3.5 Flash
 
 How can I help you today?`;
     await ctx.reply(welcome, { parse_mode: "Markdown" });
@@ -101,8 +101,8 @@ bot.on("message:text", async (ctx) => {
     const userId = ctx.from!.id;
     console.log(`📩 [Bot] Received text from ${userId}: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`);
 
+    // Show "typing…" indicator while processing
     await ctx.replyWithChatAction("typing");
-
     try {
         console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
         const response = await handleMessage(userMessage, userId);

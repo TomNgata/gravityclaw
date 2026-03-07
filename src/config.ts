@@ -9,6 +9,7 @@ export interface MCPServerConfig {
 export interface Config {
     telegramBotToken: string;
     openRouterApiKey: string;
+    anthropicApiKey?: string;
     allowedUserIds: number[];
     openaiApiKey: string;
     elevenLabsApiKey: string;
@@ -31,6 +32,7 @@ function requireEnv(name: string, required: boolean = true): string | undefined 
 export const config: Config = {
     telegramBotToken: requireEnv("TELEGRAM_BOT_TOKEN")!,
     openRouterApiKey: requireEnv("OPENROUTER_API_KEY")!,
+    anthropicApiKey: requireEnv("ANTHROPIC_API_KEY", false),
     allowedUserIds: requireEnv("ALLOWED_USER_IDS")!
         .split(",")
         .map((id) => {
