@@ -20,12 +20,25 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content TEXT NOT NULL,
     category TEXT DEFAULT 'facts',
+    embedding BLOB,
+    importance INTEGER DEFAULT 1,
+    metadata TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     content,
     content_id UNINDEXED
+  );
+
+  CREATE TABLE IF NOT EXISTS knowledge_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    category TEXT DEFAULT 'general',
+    embedding BLOB,
+    source_message_ids TEXT, -- JSON array of conversation IDs
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS conversations (

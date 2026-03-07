@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
-import { searchMemories, logConversation, getRecentHistory } from "./memory/manager.js";
+import { searchMemories, logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic } from "./memory/manager.js";
+import { summarizeHistory } from "./memory/summarizer.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -91,8 +92,12 @@ export async function handleMessage(
     imageUrl?: string
 ): Promise<string> {
     // 1. Context Assembly
-    const memories = searchMemories(userMessage, 3);
-    const history = getRecentHistory(userId, 10);
+    const [memories, knowledgeItems, history] = await Promise.all([
+        searchMemoriesSemantic(userMessage, 3),
+        searchKnowledgeItems(userMessage, 2),
+        getRecentHistory(userId, 10)
+    ]);
+    
     const historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
 
     // 2. Load dynamic personality
@@ -107,6 +112,10 @@ export async function handleMessage(
         expertModels = ["stepfun/step-3.5-flash:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free"];
     }
 
+    const kiContext = knowledgeItems.length > 0
+        ? `\n\nCORE KNOWLEDGE (KIs):\n${knowledgeItems.map(ki => `- [${ki.title}]: ${ki.content}`).join("\n")}`
+        : "";
+
     const memoryContext = memories.length > 0
         ? `\n\nRELEVANT MEMORIES:\n${memories.map(m => `- ${m.content}`).join("\n")}`
         : "";
@@ -115,7 +124,12 @@ export async function handleMessage(
         ? `\n\nRECENT CONVERSATION:\n${historyText}`
         : "";
 
-    const fullSystemPrompt = `${basePersonality}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
+    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
+
+    // Trigger periodic auto-summarization (every 5 messages)
+    if (history.length > 0 && history.length % 5 === 0) {
+        summarizeHistory(userId).catch(e => console.error("Auto-summarization trigger error:", e));
+    }
 
     // 4. Dispatch with Fallback Loop
     return handleOpenRouterFallback(userMessage, userId, fullSystemPrompt, expertModels, imageUrl);
