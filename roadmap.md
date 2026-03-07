@@ -22,30 +22,31 @@ This document outlines the evolutionary stages of the Gravity Claw agentic swarm
     - Importance-weighted context injection based on the specific expert model being used.
     - Persistent soul-memory that updates based on user preferences and shared experiences.
 
-### Level 10: Multi-Modal Mastery
-- **Goal**: Deep visual and auditory integration.
+### Level 10: Multi-Modal Mastery & Proactive Vitality [COMPLETE]
+- **Goal**: Deep visual/auditory integration and recursive self-monitoring.
 - **Features**:
-    - Real-time vision expert (`gemma-3-12b`) triggered automatically for photo analyze requests.
-    - Integrated speech-to-intent loops (directly turning voice to tool calls).
-    - "DALL-E / Flux" bridge for generating visuals from text prompts within the chat.
+    - **Voice Integration (ElevenLabs)**: Realistic human-sounding voices for Telegram voice note replies.
+    - **Heartbeat System**: Autonomous background cycles where Claw checks its own status, environment (Railway logs), and pending tasks every hour.
+    - **Real-time Vision**: Automatic `gemma-3-12b` analysis for photo/document uploads.
+    - **Morning Briefing**: Proactive daily summary of news, GitHub activity, and memory insights.
 
-### Level 11: Collaborative Consensus
-- **Goal**: Intra-swarm deliberation.
+### Level 11: Collaborative Consensus & Skills System
+- **Goal**: Intra-swarm deliberation and extensible capability modules.
 - **Features**:
-    - **Critic-Member Pattern**: Before a final response is sent, the Router asks a separate "critic" model to verify the code or logic.
-    - **Consensus Loop**: For high-stakes decisions (file deletion, system config), multiple models must "vote" or agree.
-    - Swarm-wide reflection steps to improve the quality of responses before delivery.
+    - **Skills System**: A "no-code" plugin architecture where new capabilities are added via markdown "Skill Files".
+    - **Critic-Member Pattern**: Multi-model verification of complex code or logic before response.
+    - **Consensus Loop**: Voting-based decision making for high-stakes environmental actions.
 
 ### Level 12: Autonomous Workflow Engineering
 - **Goal**: Direct environmental manipulation and self-extension.
 - **Features**:
-    - Ability for the swarm to identify missing functionality and write its own MCP tools.
-    - End-to-end task execution (e.g., "Build me a React app and deploy it on Railway") without manual intervention.
-    - Dynamic environment management (installing packages, running builds, debugging failures autonomously).
+    - **Auto-MCP Generation**: The swarm identifies missing tools and writes its own MCP server code.
+    - **End-to-End Orchestration**: High-level objective execution (e.g., "Build and deploy a feature").
+    - **Multi-Channel Router**: Extending to WhatsApp/Slack for a unified cross-platform brain.
 
 ### Level 13: Self-Improving Swarm (Recursive Optimization)
 - **Goal**: Self-tuning and performance optimization.
 - **Features**:
-    - The swarm analyzes its own logs to identify which models are failing or yielding poor results.
-    - Autonomous re-ranking of the expert list based on real-world performance metrics.
-    - Recursive prompt optimization: The orchestrator rewrites expert prompts to improve clarity and reduce token consumption.
+    - **Usage & Performance Tracking**: Monitoring cost and latency per model.
+    - **Autonomous Re-ranking**: Real-time adjustments to the expert queue based on error rates (429s).
+    - **Recursive Prompt Engineering**: Self-rewriting system prompts for better clarity.

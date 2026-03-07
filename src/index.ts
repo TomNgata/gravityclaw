@@ -1,5 +1,6 @@
 import { bot } from "./bot.js";
 import { initializeTools } from "./tools/index.js";
+import { startHeartbeat } from "./heartbeat.js";
 
 const RETRY_DELAY_MS = 15000;
 const MAX_RETRIES = 5;
@@ -9,6 +10,7 @@ async function start(attempt: number = 1): Promise<void> {
         console.log(`🦀 Gravity Claw starting... (attempt ${attempt})`);
 
         await initializeTools();
+        startHeartbeat();
 
         await bot.start({
             onStart: (info) => {

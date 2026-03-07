@@ -42,12 +42,13 @@ EXPERTS:
 3. "openai/gpt-oss-120b:free": Best for large-scale reasoning and deep knowledge.
 4. "stepfun/step-3.5-flash:free": Best for agentic tool use, planning, and fast response.
 5. "liquid/lfm-2.5-1.2b-thinking:free": Best for deep thinking and complex multi-step reasoning.
+6. "google/gemma-3-12b-it:free": Best for VISION, image analysis, and multi-modal tasks.
 
 CRITICAL INSTRUCTION: Since free endpoints frequently experience rate limits (429) or downtime, you MUST return a JSON array of exactly 3 ranked model strings, from best fit to worst fit. The swarm will fallback through this list.
-For example, if it's a coding task, return:
-["qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-120b:free"]
 
-Return ONLY the valid JSON array. Do not include markdown blocks or any other text.`;
+VISION INSTRUCTION: If an image is provided (indicated below), you MUST put "google/gemma-3-12b-it:free" as the #1 choice.
+
+Return ONLY the valid JSON array (e.g., ["model1", "model2", "model3"]). Do not include markdown blocks or any other text.`;
 
 const MAX_ITERATIONS = 10;
 
@@ -55,11 +56,12 @@ const MAX_ITERATIONS = 10;
  * The "Orchestrator" Router.
  * Returns an array of ranked models to loop through for fault tolerance.
  */
-async function getExpertModels(userMessage: string, history: string): Promise<string[]> {
+async function getExpertModels(userMessage: string, history: string, imageUrl?: string): Promise<string[]> {
     try {
+        const visionFlag = imageUrl ? "\n[ATTENTION: IMAGE UPLOADED]" : "";
         const response = await openrouter.chat.completions.create({
             model: "stepfun/step-3.5-flash:free",
-            messages: [{ role: "user", content: ORCHESTRATOR_PROMPT + `\n\nUser: ${userMessage}` }],
+            messages: [{ role: "user", content: ORCHESTRATOR_PROMPT + `${visionFlag}\n\nUser: ${userMessage}` }],
             max_tokens: 150,
         });
         
@@ -78,7 +80,7 @@ async function getExpertModels(userMessage: string, history: string): Promise<st
     // Default reliable fallback queue
     return [
         "stepfun/step-3.5-flash:free",
-        "mistralai/mistral-small-3.1-24b-instruct:free",
+        imageUrl ? "google/gemma-3-12b-it:free" : "mistralai/mistral-small-3.1-24b-instruct:free",
         "openai/gpt-oss-20b:free"
     ];
 }
@@ -104,12 +106,16 @@ export async function handleMessage(
     const basePersonality = await loadPersonality();
 
     // 3. Orchestration
-    console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-    let expertModels = await getExpertModels(userMessage, historyText);
+    console.log(`🔍 [Agent] Orchestrating for user: ${userId}${imageUrl ? " (with image)" : ""}`);
+    let expertModels = await getExpertModels(userMessage, historyText, imageUrl);
 
     // Failsafe guarantees it's an array
     if (!Array.isArray(expertModels) || expertModels.length === 0) {
-        expertModels = ["stepfun/step-3.5-flash:free", "qwen/qwen3-coder:free", "meta-llama/llama-3.3-70b-instruct:free"];
+        expertModels = [
+            imageUrl ? "google/gemma-3-12b-it:free" : "stepfun/step-3.5-flash:free",
+            "qwen/qwen3-coder:free",
+            "meta-llama/llama-3.3-70b-instruct:free"
+        ];
     }
 
     const kiContext = knowledgeItems.length > 0
