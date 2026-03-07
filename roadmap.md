@@ -22,13 +22,13 @@ This document outlines the evolutionary stages of the Gravity Claw agentic swarm
     - Importance-weighted context injection based on the specific expert model being used.
     - Persistent soul-memory that updates based on user preferences and shared experiences.
 
-### Level 10: Multi-Modal Mastery & Proactive Vitality [COMPLETE]
-- **Goal**: Deep visual/auditory integration and recursive self-monitoring.
+### Level 10: Multi-Modal & Cognitive Upgrades [COMPLETE]
+- **Goal**: Deep visual integration, recursive self-monitoring, and advanced session context management.
 - **Features**:
-    - **Voice Integration (ElevenLabs)**: Realistic human-sounding voices for Telegram voice note replies.
-    - **Heartbeat System**: Autonomous background cycles where Claw checks its own status, environment (Railway logs), and pending tasks every hour.
-    - **Real-time Vision**: Automatic `gemma-3-12b` analysis for photo/document uploads.
-    - **Morning Briefing**: Proactive daily summary of news, GitHub activity, and memory insights.
+    - **Heartbeat System**: Autonomous background cycles for self-checks and proactive thinking.
+    - **Real-time Vision**: Automatic `gemma-3-12b` (or preferred vision model) analysis for photo uploads.
+    - **Knowledge Graph**: Stateful memory of interconnected entities and relationships with graph traversal context.
+    - **Context Pruning**: Automated session summarization and `/compact` command to maintain token efficiency in long threads.
 
 ### Level 11: Collaborative Consensus & Skills System
 - **Goal**: Intra-swarm deliberation and extensible capability modules.

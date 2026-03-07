@@ -48,18 +48,42 @@ db.exec(`
     response TEXT NOT NULL,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
+
+  CREATE TABLE IF NOT EXISTS entities (
+    id TEXT PRIMARY KEY, -- UUID or unique name
+    name TEXT NOT NULL,
+    type TEXT DEFAULT 'concept',
+    metadata TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
+    name,
+    content_id UNINDEXED
+  );
+
+  CREATE TABLE IF NOT EXISTS relationships (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    relation TEXT NOT NULL,
+    metadata TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(source_id) REFERENCES entities(id),
+    FOREIGN KEY(target_id) REFERENCES entities(id)
+  );
 `);
 
 // ── Triggers for FTS Sync ──────────────────────────────────────────────
-// This keeps the FTS virtual table in sync with the memories table.
+// This keeps the FTS virtual tables in sync.
 
 db.exec(`
   CREATE TRIGGER IF NOT EXISTS after_memories_insert AFTER INSERT ON memories BEGIN
     INSERT INTO memories_fts(content, content_id) VALUES (new.content, new.id);
   END;
 
-  CREATE TRIGGER IF NOT EXISTS after_memories_delete AFTER DELETE ON memories BEGIN
-    INSERT INTO memories_fts(memories_fts, content, content_id) VALUES('delete', old.content, old.id);
+  CREATE TRIGGER IF NOT EXISTS after_entities_insert AFTER INSERT ON entities BEGIN
+    INSERT INTO entities_fts(name, content_id) VALUES (new.name, new.id);
   END;
 `);
 

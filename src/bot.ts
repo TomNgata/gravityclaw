@@ -8,6 +8,8 @@ import { existsSync, mkdirSync, unlinkSync, createWriteStream } from "fs";
 import { finished } from "stream/promises";
 import axios from "axios";
 
+import { pruner } from "./memory/pruner.js";
+
 // ── Create bot (long-polling only — no web server) ─────────────────────
 export const bot = new Bot(config.telegramBotToken);
 
@@ -24,17 +26,33 @@ bot.use(async (ctx: Context, next) => {
 // ── Handle /start command ──────────────────────────────────────────────
 bot.command("start", async (ctx) => {
     const welcome = `🤖 **Gravity Claw Online**
-Version: Level 8 (Optimized Swarm V3)
+Version: Level 10 (Multi-Modal & Proactive)
 
-I am now a more resilient multi-model agentic swarm, dynamically routing your requests to specialized experts:
-- 🧠 **Strategy/Logic**: GPT-OSS 120B / Llama 3.3 70B
-- 💻 **Engineering**: Qwen 3 Coder
-- 🔧 **Agentic/Tools**: StepFun 3.5 Flash (Optimized)
-- 🧠 **Thinking**: Liquid LFM 2.5
-- ⚡ **Router**: StepFun 3.5 Flash
+I am now a more resilient multi-model agentic swarm, dynamically routing your requests to specialized experts.
+
+NEW FEATURES:
+- 🕸️ **Knowledge Graph**: I remember interconnected entities and relationships.
+- 📉 **Context Pruning**: Use /compact to distill our conversation.
 
 How can I help you today?`;
     await ctx.reply(welcome, { parse_mode: "Markdown" });
+});
+
+// ── Handle /compact command ───────────────────────────────────────────
+bot.command("compact", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    await ctx.replyWithChatAction("typing");
+    await ctx.reply("📉 *Compacting session context...*", { parse_mode: "Markdown" });
+    
+    try {
+        const summary = await pruner.compactSession(userId);
+        await ctx.reply(`✅ *Session Compacted*\n\n**Summary so far:**\n${summary}`, { parse_mode: "Markdown" });
+    } catch (error) {
+        console.error("Compact error:", error);
+        await ctx.reply("⚠️ Failed to compact session.");
+    }
 });
 
 // ── Handle Voice Messages ──────────────────────────────────────────────

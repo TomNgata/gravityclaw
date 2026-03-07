@@ -3,6 +3,8 @@ import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
 import { searchMemories, logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic } from "./memory/manager.js";
 import { summarizeHistory } from "./memory/summarizer.js";
+import { graphManager } from "./memory/graph.js";
+import { pruner } from "./memory/pruner.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -94,13 +96,22 @@ export async function handleMessage(
     imageUrl?: string
 ): Promise<string> {
     // 1. Context Assembly
-    const [memories, knowledgeItems, history] = await Promise.all([
+    const [memories, knowledgeItems, graphContext, history] = await Promise.all([
         searchMemoriesSemantic(userMessage, 3),
         searchKnowledgeItems(userMessage, 2),
+        graphManager.searchGraph(userMessage),
         getRecentHistory(userId, 10)
     ]);
     
-    const historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
+    let historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
+
+    // 1.1 Context Pruning (Auto-summarize if too long)
+    const historyTokens = pruner.estimateTokens(historyText);
+    if (historyTokens > 2000) { // Prune if history alone is ~2000 tokens
+        console.log(`📉 Context Pruning Triggered: ${historyTokens} tokens`);
+        const summary = await pruner.summarizeChunk(userId, history);
+        historyText = `--- SUMMARY OF PREVIOUS CONVERSATION ---\n${summary}\n--------------------------------------`;
+    }
 
     // 2. Load dynamic personality
     const basePersonality = await loadPersonality();
@@ -130,7 +141,7 @@ export async function handleMessage(
         ? `\n\nRECENT CONVERSATION:\n${historyText}`
         : "";
 
-    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
+    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${graphContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
 
     // Trigger periodic auto-summarization (every 5 messages)
     if (history.length > 0 && history.length % 5 === 0) {
@@ -240,6 +251,15 @@ async function handleOpenRouterFallback(
         // If the deployment was successful and we got a response, return it (breaking the fallback loop)
         if (modelSucceeded && finalResponse) {
             logConversation(userId, userMessage, finalResponse);
+            
+            // 🕸️ Update Knowledge Graph (Background)
+            graphManager.extractFromText(`${userMessage}\n\n${finalResponse}`).then(({ entities, relationships }) => {
+                if (entities.length > 0 || relationships.length > 0) {
+                    console.log(`🕸️ Graph Update: ${entities.length} entities, ${relationships.length} relationships`);
+                    graphManager.saveGraphData(entities, relationships);
+                }
+            }).catch(e => console.error("Graph background update error:", e));
+
             return finalResponse;
         }
     }
