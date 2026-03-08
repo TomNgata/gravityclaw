@@ -17,8 +17,8 @@ export interface Memory {
     media_url?: string;
     access_count: number;
     last_accessed?: string;
-    embedding?: string; // Now stored as TEXT (placeholder)
-    timestamp: string;
+    timestamp?: string;
+    similarity?: number;
 }
 
 export interface KnowledgeItem {
@@ -28,13 +28,13 @@ export interface KnowledgeItem {
     category: string;
     access_count: number;
     last_accessed?: string;
-    embedding?: string; // Stored as TEXT
     source_message_ids?: string;
-    timestamp: string;
+    timestamp?: string;
+    similarity?: number;
 }
 
 /**
- * Generate an embedding for a string using OpenRouter/OpenAI.
+ * Generate a 1536-dimensional embedding using OpenRouter's text-embedding-3-small.
  */
 async function getEmbedding(text: string): Promise<number[]> {
     try {
@@ -45,22 +45,21 @@ async function getEmbedding(text: string): Promise<number[]> {
         return response.data[0].embedding;
     } catch (error) {
         console.error("Embedding error:", error);
-        return new Array(1536).fill(0);
+        return new Array(1536).fill(0); // Zero vector fallback
     }
 }
 
 /**
- * Save a piece of information to long-term memory.
- * Note: SQLite FTS5 logic is replaced by Postgres GIN/ILike or Supabase Search.
+ * Save a new memory with a real pgvector embedding.
  */
 export async function saveMemory(
-    content: string, 
-    category: string = "facts", 
+    content: string,
+    category: string = "facts",
     importance: number = 1,
     multimodal?: { type: string, url: string }
 ): Promise<number> {
-    // Note: Embedding storage is temporarily disabled or stored as string due to hex data issues.
-    // For now, we save the text content to ensure character continuity.
+    const embedding = await getEmbedding(content);
+
     const { data, error } = await supabase
         .from('memories')
         .insert([{
@@ -68,7 +67,8 @@ export async function saveMemory(
             category,
             importance,
             media_type: multimodal?.type || null,
-            media_url: multimodal?.url || null
+            media_url: multimodal?.url || null,
+            embedding: `[${embedding.join(",")}]`  // Supabase expects vector as string literal
         }])
         .select('id')
         .single();
@@ -82,12 +82,34 @@ export async function saveMemory(
 }
 
 /**
- * Search memories using keyword search (Postgres ILIKE fallback for now).
- * In a future step, we can re-enable semantic search via pgvector on Supabase.
+ * True semantic search using pgvector cosine similarity via Supabase RPC.
+ * Falls back to ILIKE keyword search if no embeddings exist yet.
  */
 export async function searchMemoriesSemantic(query: string, limit: number = 5): Promise<Memory[]> {
     if (!query || query.trim().length === 0) return [];
 
+    const queryEmbedding = await getEmbedding(query);
+
+    // Try vector search first
+    const { data: vectorResults, error: vectorError } = await supabase.rpc('match_memories', {
+        query_embedding: `[${queryEmbedding.join(",")}]`,
+        match_threshold: 0.40,
+        match_count: limit
+    });
+
+    if (!vectorError && vectorResults && vectorResults.length > 0) {
+        console.log(`🧠 Semantic search found ${vectorResults.length} vector matches`);
+        // Update access metrics (fire-and-forget)
+        const ids = vectorResults.map((m: any) => m.id);
+        supabase.from('memories')
+            .update({ last_accessed: new Date().toISOString(), access_count: supabase.rpc('increment', { x: 1 }) as any })
+            .in('id', ids)
+            .then();
+        return vectorResults as Memory[];
+    }
+
+    // Fallback: keyword search when no embeddings exist yet
+    console.log(`💬 Falling back to keyword search (no vector matches)`);
     const { data, error } = await supabase
         .from('memories')
         .select('*')
@@ -96,45 +118,46 @@ export async function searchMemoriesSemantic(query: string, limit: number = 5): 
         .limit(limit);
 
     if (error) {
-        console.error("❌ Supabase Search Semantic Error:", error);
+        console.error("❌ Supabase Search Error:", error);
         return [];
-    }
-
-    // Update access metrics asynchronously
-    if (data.length > 0) {
-        const ids = data.map(m => m.id);
-        // Supabase doesn't support complex 'access_count = access_count + 1' easily in a single call without RPC.
-        // For simplicity during migration, we'll just update the last_accessed.
-        supabase
-            .from('memories')
-            .update({ last_accessed: new Date().toISOString() })
-            .in('id', ids)
-            .then(({ error: updateError }) => {
-                if (updateError) console.warn("⚠️ Failed to update access time:", updateError);
-            });
     }
 
     return data as Memory[];
 }
 
 /**
- * Keyword search wrapper (replaces SQLite FTS5).
+ * Keyword search wrapper (for tools that need it explicitly).
  */
 export async function searchMemoriesFTS(query: string, limit: number = 5): Promise<Memory[]> {
-    return searchMemoriesSemantic(query, limit);
+    if (!query || query.trim().length === 0) return [];
+    const { data, error } = await supabase
+        .from('memories')
+        .select('*')
+        .ilike('content', `%${query}%`)
+        .order('importance', { ascending: false })
+        .limit(limit);
+    return (error ? [] : data) as Memory[];
 }
 
 /**
- * Save a Knowledge Item (KI).
+ * Save a Knowledge Item with a real pgvector embedding.
  */
-export async function saveKnowledgeItem(title: string, content: string, category: string = "general", sourceIds: number[] = []): Promise<number> {
+export async function saveKnowledgeItem(
+    title: string,
+    content: string,
+    category: string = "general",
+    sourceIds: number[] = []
+): Promise<number> {
+    const embedding = await getEmbedding(`${title} ${content}`);
+
     const { data, error } = await supabase
         .from('knowledge_items')
         .insert([{
             title,
             content,
             category,
-            source_message_ids: JSON.stringify(sourceIds)
+            source_message_ids: JSON.stringify(sourceIds),
+            embedding: `[${embedding.join(",")}]`
         }])
         .select('id')
         .single();
@@ -148,44 +171,50 @@ export async function saveKnowledgeItem(title: string, content: string, category
 }
 
 /**
- * Search Knowledge Items.
+ * True semantic search on knowledge items using pgvector.
  */
 export async function searchKnowledgeItems(query: string, limit: number = 3): Promise<KnowledgeItem[]> {
+    const queryEmbedding = await getEmbedding(query);
+
+    const { data: vectorResults, error: vectorError } = await supabase.rpc('match_knowledge_items', {
+        query_embedding: `[${queryEmbedding.join(",")}]`,
+        match_threshold: 0.40,
+        match_count: limit
+    });
+
+    if (!vectorError && vectorResults && vectorResults.length > 0) {
+        console.log(`🧠 KI Semantic search found ${vectorResults.length} matches`);
+        return vectorResults as KnowledgeItem[];
+    }
+
+    // Fallback
     const { data, error } = await supabase
         .from('knowledge_items')
         .select('*')
         .ilike('content', `%${query}%`)
         .limit(limit);
 
-    if (error) {
-        console.error("❌ Supabase Search KI Error:", error);
-        return [];
-    }
-
-    return data as KnowledgeItem[];
+    return (error ? [] : data) as KnowledgeItem[];
 }
 
 /**
- * Log a conversation exchange for short-term history.
+ * Log a conversation exchange.
  */
 export async function logConversation(userId: number, message: string, response: string): Promise<void> {
     const { error } = await supabase
         .from('conversations')
-        .insert([{
-            user_id: userId,
-            message,
-            response
-        }]);
+        .insert([{ user_id: userId, message, response }]);
 
-    if (error) {
-        console.error("❌ Supabase Log Conversation Error:", error);
-    }
+    if (error) console.error("❌ Supabase Log Conversation Error:", error);
 }
 
 /**
- * Get the most recent conversation history for a user.
+ * Get recent conversation history for a user.
  */
-export async function getRecentHistory(userId: number, limit: number = 10): Promise<{ id: number, message: string, response: string }[]> {
+export async function getRecentHistory(
+    userId: number,
+    limit: number = 10
+): Promise<{ id: number, message: string, response: string }[]> {
     const { data, error } = await supabase
         .from('conversations')
         .select('id, message, response')
@@ -202,10 +231,9 @@ export async function getRecentHistory(userId: number, limit: number = 10): Prom
 }
 
 /**
- * Self-Evolving: Reorganize and prune memory. 
- * Placeholder for cloud-native evolution logic.
+ * Memory self-evolution placeholder (future RPC-based implementation).
  */
 export async function reorganizeMemory(): Promise<{ merged: number, decayed: number }> {
-    console.log("🧬 Supabase Memory Self-Evolution logic pending RPC implementation.");
+    console.log("🧬 Supabase Memory Self-Evolution pending RPC implementation.");
     return { merged: 0, decayed: 0 };
 }
