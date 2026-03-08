@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
-import { searchMemories, logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic, saveMemory } from "./memory/manager.js";
+import { logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic, saveMemory } from "./memory/manager.js";
 import { summarizeHistory } from "./memory/summarizer.js";
 import { graphManager } from "./memory/graph.js";
 import { pruner } from "./memory/pruner.js";
@@ -106,7 +106,7 @@ export async function handleMessage(
         graphManager.searchGraph(userMessage),
         getRecentHistory(userId, 10),
         markdownMemory.loadAll()
-    ]);
+    ]) as [any[], any[], string, any[], string];
     
     let historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
 
@@ -155,7 +155,7 @@ export async function handleMessage(
     const skillsContext = skillsContextObj ? `\n\n${skillsContextObj}` : "";
 
     // 2.2 Thinking Level Injection
-    const thinkingLevel = getThinkingLevel(userId);
+    const thinkingLevel = await getThinkingLevel(userId);
     let thinkingPrompt = "";
     switch (thinkingLevel) {
         case "low":

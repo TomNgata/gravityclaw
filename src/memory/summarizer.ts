@@ -11,7 +11,7 @@ const openrouter = new OpenAI({
  * Summarize recent conversation history into a Knowledge Item.
  */
 export async function summarizeHistory(userId: number, messageCount: number = 10): Promise<boolean> {
-    const history = getRecentHistory(userId, messageCount);
+    const history = await getRecentHistory(userId, messageCount);
     if (history.length < 3) return false; // Not enough context to summarize
 
     const historyText = history.map(h => `User: ${h.message}\nAssistant: ${h.response}`).join("\n\n");

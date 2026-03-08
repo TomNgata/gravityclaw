@@ -10,7 +10,7 @@ export async function sendMorningBriefing(userId: number) {
         console.log(`🌅 Compiling Morning Briefing for user ${userId}...`);
 
         // Gather scheduled tasks for context
-        const tasks = getTasks(userId);
+        const tasks = await getTasks(userId);
         let taskContext = (tasks.length > 0) 
             ? `\nThe user has the following scheduled tasks today:\n` + tasks.map(t => `- [${t.cron_expression}] ${t.prompt}`).join("\n") 
             : "\nThe user has no scheduled tasks.";

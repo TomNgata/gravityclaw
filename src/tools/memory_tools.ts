@@ -1,4 +1,4 @@
-import { saveMemory, searchMemories } from "../memory/manager.js";
+import { saveMemory, searchMemoriesFTS } from "../memory/manager.js";
 
 // ── store_memory ───────────────────────────────────────────────────────
 
@@ -22,13 +22,11 @@ export const storeMemoryDef = {
     },
 };
 
-export function storeMemoryExec(input: Record<string, unknown>): string {
+export async function storeMemoryExec(input: Record<string, unknown>): Promise<string> {
     const content = input.content as string;
     const category = (input.category as string) || "facts";
-
     if (!content) return "Error: content is required.";
-
-    const id = saveMemory(content, category);
+    const id = await saveMemory(content, category);
     return `✅ Memory stored (ID: ${id}): "${content}"`;
 }
 
@@ -49,16 +47,11 @@ export const recallMemoryDef = {
     },
 };
 
-export function recallMemoryExec(input: Record<string, unknown>): string {
+export async function recallMemoryExec(input: Record<string, unknown>): Promise<string> {
     const query = input.query as string;
     if (!query) return "Error: query is required.";
-
-    const results = searchMemories(query);
-
-    if (results.length === 0) {
-        return "No relevant memories found.";
-    }
-
-    const formatted = results.map(r => `[${r.category}] ${r.content}`).join("\n");
+    const results = await searchMemoriesFTS(query);
+    if (results.length === 0) return "No relevant memories found.";
+    const formatted = results.map((r: any) => `[${r.category}] ${r.content}`).join("\n");
     return `Found these relevant memories:\n${formatted}`;
 }

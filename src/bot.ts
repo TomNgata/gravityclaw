@@ -71,7 +71,7 @@ bot.command("think", async (ctx) => {
     const validLevels = ["off", "low", "medium", "high"];
 
     if (!args || !validLevels.includes(args)) {
-        const currentLevel = getThinkingLevel(userId);
+        const currentLevel = await getThinkingLevel(userId);
         await ctx.reply(
             `🧠 *Thinking Level Configuration*\n\nCurrent Level: \`${currentLevel}\`\n\nUsage: \`/think [off|low|medium|high]\`\n- \`off\`: Default fast responses.\n- \`low\`: Brief step-by-step reasoning.\n- \`medium\`: Detailed step-by-step reasoning.\n- \`high\`: Exhaustive, multi-angle reasoning.`,
             { parse_mode: "Markdown" }
@@ -80,7 +80,7 @@ bot.command("think", async (ctx) => {
     }
 
     try {
-        setThinkingLevel(userId, args as ThinkingLevel);
+        await setThinkingLevel(userId, args as ThinkingLevel);
         await ctx.reply(`✅ *Thinking Level set to:* \`${args}\``, { parse_mode: "Markdown" });
     } catch (e) {
         console.error("Thinking level error:", e);
@@ -95,7 +95,7 @@ bot.command("set_briefing", async (ctx) => {
     if (!userId) return;
 
     const timeStr = ctx.match.trim();
-    if (setBriefingTime(userId, timeStr)) {
+    if (await setBriefingTime(userId, timeStr)) {
         await ctx.reply(`🌅 Morning Briefing time updated to \`${timeStr}\`.`, { parse_mode: "Markdown" });
     } else {
         await ctx.reply(`⚠️ Usage: \`/set_briefing HH:MM\` (24-hour format).`, { parse_mode: "Markdown" });
@@ -107,7 +107,7 @@ bot.command("set_recap", async (ctx) => {
     if (!userId) return;
 
     const timeStr = ctx.match.trim();
-    if (setRecapTime(userId, timeStr)) {
+    if (await setRecapTime(userId, timeStr)) {
         await ctx.reply(`🌙 Evening Recap time updated to \`${timeStr}\`.`, { parse_mode: "Markdown" });
     } else {
         await ctx.reply(`⚠️ Usage: \`/set_recap HH:MM\` (24-hour format).`, { parse_mode: "Markdown" });
@@ -143,7 +143,7 @@ bot.command("tasks", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    const tasks = getTasks(userId);
+    const tasks = await getTasks(userId);
     if (tasks.length === 0) {
         await ctx.reply("📋 You have no scheduled tasks.");
         return;
@@ -163,7 +163,7 @@ bot.command("pause_task", async (ctx) => {
     const taskId = parseInt(ctx.match.trim());
     if (!userId || isNaN(taskId)) return;
 
-    const success = pauseSchedule(userId, taskId);
+    const success = await pauseSchedule(userId, taskId);
     await ctx.reply(success ? `⏸️ Task ${taskId} paused.` : `⚠️ Task ${taskId} not found.`);
 });
 
@@ -172,7 +172,7 @@ bot.command("resume_task", async (ctx) => {
     const taskId = parseInt(ctx.match.trim());
     if (!userId || isNaN(taskId)) return;
 
-    const success = resumeSchedule(userId, taskId);
+    const success = await resumeSchedule(userId, taskId);
     await ctx.reply(success ? `▶️ Task ${taskId} resumed.` : `⚠️ Task ${taskId} not found.`);
 });
 
@@ -181,7 +181,7 @@ bot.command("delete_task", async (ctx) => {
     const taskId = parseInt(ctx.match.trim());
     if (!userId || isNaN(taskId)) return;
 
-    const success = deleteSchedule(userId, taskId);
+    const success = await deleteSchedule(userId, taskId);
     await ctx.reply(success ? `🗑️ Task ${taskId} deleted.` : `⚠️ Task ${taskId} not found.`);
 });
 

@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { config } from "../config.js";
-import { db } from "./database.js";
+import { supabase } from "./database.js";
 
 const openrouter = new OpenAI({
     apiKey: config.openRouterApiKey,
@@ -21,13 +21,7 @@ export interface Relationship {
     metadata?: string;
 }
 
-/**
- * Knowledge Graph Manager
- */
 export const graphManager = {
-    /**
-     * Extracts entities and relationships from text using the LLM
-     */
     async extractFromText(text: string): Promise<{ entities: Entity[], relationships: Relationship[] }> {
         try {
             const prompt = `Extract entities and relationships from this text.
@@ -35,7 +29,6 @@ Return ONLY JSON in this format: {"entities": [{"name": "...", "type": "...", "m
 
 TEXT:
 ${text}`;
-
             const response = await openrouter.chat.completions.create({
                 model: "stepfun/step-3.5-flash:free",
                 messages: [{ role: "user", content: prompt }],
@@ -43,12 +36,9 @@ ${text}`;
             });
 
             let content = response.choices[0].message.content?.trim() || "{}";
-            console.log("🕸️ Raw Extraction Response:", content);
-            
-            // Extract JSON block
             const match = content.match(/\{[\s\S]*\}/);
             if (match) content = match[0];
-            
+
             const data = JSON.parse(content);
             const entities: Entity[] = (data.entities || []).map((e: any): Entity => ({
                 id: (e.id || e.name || "").toLowerCase().replace(/\s+/g, "_"),
@@ -70,70 +60,56 @@ ${text}`;
         }
     },
 
-    /**
-     * Saves entities and relationships to the database
-     */
-    saveGraphData(entities: Entity[], relationships: Relationship[]) {
-        const insertEntity = db.prepare(`
-            INSERT OR IGNORE INTO entities (id, name, type, metadata)
-            VALUES (?, ?, ?, ?)
-        `);
-
-        const insertRelation = db.prepare(`
-            INSERT INTO relationships (source_id, target_id, relation, metadata)
-            VALUES (?, ?, ?, ?)
-        `);
-
-        const transaction = db.transaction(() => {
-            for (const entity of entities) {
-                insertEntity.run(entity.id, entity.name, entity.type, entity.metadata || null);
+    async saveGraphData(entities: Entity[], relationships: Relationship[]) {
+        try {
+            if (entities.length > 0) {
+                await supabase.from('entities').upsert(
+                    entities.map(e => ({ id: e.id, name: e.name, type: e.type, metadata: e.metadata || null })),
+                    { onConflict: 'id', ignoreDuplicates: true }
+                );
             }
-            for (const rel of relationships) {
-                insertRelation.run(rel.source_id, rel.target_id, rel.relation, rel.metadata || null);
+            if (relationships.length > 0) {
+                await supabase.from('relationships').insert(
+                    relationships.map(r => ({ source_id: r.source_id, target_id: r.target_id, relation: r.relation, metadata: r.metadata || null }))
+                );
             }
-        });
-
-        transaction();
+        } catch (error) {
+            console.error("Graph save error:", error);
+        }
     },
 
-    /**
-     * Searches for entities and their related neighbors
-     */
-    searchGraph(query: string): string {
+    async searchGraph(query: string): Promise<string> {
         try {
-            // 1. Find entities matching query via FTS
-            const matchingEntities = db.prepare(`
-                SELECT content_id as id, name FROM entities_fts WHERE name MATCH ? LIMIT 5
-            `).all(query) as { id: string, name: string }[];
+            const { data: matchingEntities } = await supabase
+                .from('entities')
+                .select('id, name')
+                .ilike('name', `%${query}%`)
+                .limit(5);
 
-            if (matchingEntities.length === 0) return "";
+            if (!matchingEntities || matchingEntities.length === 0) return "";
 
             let context = "--- Knowledge Graph Context ---\n";
             for (const entity of matchingEntities) {
                 context += `Entity: ${entity.name}\n`;
-                
-                // 2. Find outgoing relationships
-                const outgoing = db.prepare(`
-                    SELECT r.relation, e.name as target 
-                    FROM relationships r
-                    JOIN entities e ON r.target_id = e.id
-                    WHERE r.source_id = ?
-                `).all(entity.id) as { relation: string, target: string }[];
 
-                for (const rel of outgoing) {
-                    context += `- ${entity.name} ${rel.relation} ${rel.target}\n`;
+                const { data: outgoing } = await supabase
+                    .from('relationships')
+                    .select('relation, entities!relationships_target_id_fkey(name)')
+                    .eq('source_id', entity.id);
+
+                for (const rel of (outgoing || [])) {
+                    const target = (rel.entities as any)?.name;
+                    if (target) context += `- ${entity.name} ${rel.relation} ${target}\n`;
                 }
 
-                // 3. Find incoming relationships
-                const incoming = db.prepare(`
-                    SELECT r.relation, e.name as source 
-                    FROM relationships r
-                    JOIN entities e ON r.source_id = e.id
-                    WHERE r.target_id = ?
-                `).all(entity.id) as { relation: string, source: string }[];
+                const { data: incoming } = await supabase
+                    .from('relationships')
+                    .select('relation, entities!relationships_source_id_fkey(name)')
+                    .eq('target_id', entity.id);
 
-                for (const rel of incoming) {
-                    context += `- ${rel.source} ${rel.relation} ${entity.name}\n`;
+                for (const rel of (incoming || [])) {
+                    const source = (rel.entities as any)?.name;
+                    if (source) context += `- ${source} ${rel.relation} ${entity.name}\n`;
                 }
             }
             return context + "----------------------------\n";

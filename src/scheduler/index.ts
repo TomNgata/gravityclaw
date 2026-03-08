@@ -1,12 +1,11 @@
 import cron from "node-cron";
-import { db } from "../memory/database.js";
+import { supabase } from "../memory/database.js";
 import { bot } from "../bot.js";
 import { handleMessage } from "../agent.js";
 import { parseNaturalLanguageToCron } from "./parser.js";
 import { sendMorningBriefing } from "../proactive/briefing.js";
 import { sendEveningRecap } from "../proactive/recap.js";
 
-// Store active scheduled tasks in memory for easy reference/cancellation
 const activeJobs = new Map<number, cron.ScheduledTask>();
 
 export interface ScheduledTaskRecord {
@@ -17,19 +16,13 @@ export interface ScheduledTaskRecord {
     status: "active" | "paused";
 }
 
-/**
- * Executes a task when its cron schedule hits.
- */
 async function executeTask(task: ScheduledTaskRecord) {
     try {
         console.log(`⏰ Executing scheduled task ID ${task.id} for user ${task.user_id}: "${task.prompt}"`);
-        
-        // Let the swarm handle the prompt as if the user sent it directly
         const response = await handleMessage(
             `[SCHEDULED TASK TRIGGER] The user scheduled the following thought/action to occur now. Execute it and provide a response to the user:\n\nTask: ${task.prompt}`,
             task.user_id
         );
-
         await bot.api.sendMessage(task.user_id, `⏰ *Scheduled Task Triggered*\n\n${response}`, { parse_mode: "Markdown" });
     } catch (e) {
         console.error(`❌ Failed to execute scheduled task ID ${task.id}:`, e);
@@ -37,140 +30,88 @@ async function executeTask(task: ScheduledTaskRecord) {
     }
 }
 
-/**
- * Loads and starts all active scheduled tasks from the database.
- */
-export function loadSchedules() {
-    console.log("⏰ Loading scheduled tasks...");
-    const tasks = db.prepare("SELECT * FROM scheduled_tasks WHERE status = 'active'").all() as ScheduledTaskRecord[];
-
-    for (const task of tasks) {
+export async function loadSchedules() {
+    console.log("⏰ Loading scheduled tasks from Supabase...");
+    const { data, error } = await supabase.from('scheduled_tasks').select('*').eq('status', 'active');
+    if (error) { console.error("❌ Failed to load schedules:", error); return; }
+    for (const task of (data as ScheduledTaskRecord[])) {
         try {
             const job = cron.schedule(task.cron_expression, () => executeTask(task));
             activeJobs.set(task.id, job);
-            console.log(`   - Task ID ${task.id} loaded: "${task.prompt}" [${task.cron_expression}]`);
+            console.log(`   - Task ID ${task.id}: "${task.prompt}" [${task.cron_expression}]`);
         } catch (e) {
-            console.error(`   - Failed to load task ID ${task.id} (Invalid cron?): ${task.cron_expression}`, e);
+            console.error(`   - Failed to load task ID ${task.id}:`, e);
         }
     }
     console.log(`⏰ Loaded ${activeJobs.size} active tasks.`);
 }
 
-/**
- * Starts a 1-minute ticker to check for Morning Briefings and Evening Recaps based on user_settings.
- */
 export function startProactiveLoops() {
     console.log("⏰ Starting Proactive Check Loop...");
-
-    cron.schedule("* * * * *", () => {
+    cron.schedule("* * * * *", async () => {
         try {
             const date = new Date();
-            const hhStr = String(date.getHours()).padStart(2, '0');
-            const mmStr = String(date.getMinutes()).padStart(2, '0');
-            const nowTimeStr = `${hhStr}:${mmStr}`;
-
-            // Check briefings
-            const briefings = db.prepare("SELECT user_id FROM user_settings WHERE briefing_time = ?").all(nowTimeStr) as { user_id: number }[];
-            for (const b of briefings) {
-                sendMorningBriefing(b.user_id);
-            }
-
-            // Check recaps
-            const recaps = db.prepare("SELECT user_id FROM user_settings WHERE recap_time = ?").all(nowTimeStr) as { user_id: number }[];
-            for (const r of recaps) {
-                sendEveningRecap(r.user_id);
-            }
-
+            const nowTimeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+            const { data: briefings } = await supabase.from('user_settings').select('user_id').eq('briefing_time', nowTimeStr);
+            for (const b of (briefings || [])) sendMorningBriefing(b.user_id);
+            const { data: recaps } = await supabase.from('user_settings').select('user_id').eq('recap_time', nowTimeStr);
+            for (const r of (recaps || [])) sendEveningRecap(r.user_id);
         } catch (error) {
             console.error("Proactive Loop Error:", error);
         }
     });
 }
 
-/**
- * Adds a new scheduled task.
- */
 export async function addSchedule(userId: number, scheduleText: string, prompt: string): Promise<{ success: boolean; message: string }> {
     let cronExp = scheduleText;
-
-    // Check if it's a raw cron string. Very naive check: 5 parts separated by space.
     if (scheduleText.split(" ").length !== 5) {
         const parsed = await parseNaturalLanguageToCron(scheduleText);
-        if (!parsed) {
-            return { success: false, message: `Could not understand the schedule time: "${scheduleText}". Please try rephrasing (e.g., "every day at 9am").` };
-        }
+        if (!parsed) return { success: false, message: `Could not understand the schedule time: "${scheduleText}".` };
         cronExp = parsed;
     }
+    if (!cron.validate(cronExp)) return { success: false, message: `The translated format [${cronExp}] is invalid.` };
 
-    if (!cron.validate(cronExp)) {
-        return { success: false, message: `The translated format [${cronExp}] is not a valid cron expression.` };
-    }
+    const { data, error } = await supabase.from('scheduled_tasks').insert([{ user_id: userId, cron_expression: cronExp, prompt, status: 'active' }]).select('id').single();
+    if (error) { console.error("❌ Supabase Add Schedule Error:", error); return { success: false, message: "Failed to save to cloud." }; }
 
-    const info = db.prepare("INSERT INTO scheduled_tasks (user_id, cron_expression, prompt, status) VALUES (?, ?, ?, ?)").run(userId, cronExp, prompt, 'active');
-    const newId = info.lastInsertRowid as number;
-
-    const task: ScheduledTaskRecord = { id: newId, user_id: userId, cron_expression: cronExp, prompt, status: "active" };
+    const task: ScheduledTaskRecord = { id: data.id, user_id: userId, cron_expression: cronExp, prompt, status: "active" };
     const job = cron.schedule(cronExp, () => executeTask(task));
-    activeJobs.set(newId, job);
-
-    return { success: true, message: `Task scheduled successfully! (Internal format: \`${cronExp}\`)` };
+    activeJobs.set(data.id, job);
+    return { success: true, message: `Task scheduled! (\`${cronExp}\`)` };
 }
 
-/**
- * Get all tasks for a user.
- */
-export function getTasks(userId: number): ScheduledTaskRecord[] {
-    return db.prepare("SELECT * FROM scheduled_tasks WHERE user_id = ?").all(userId) as ScheduledTaskRecord[];
+export async function getTasks(userId: number): Promise<ScheduledTaskRecord[]> {
+    const { data, error } = await supabase.from('scheduled_tasks').select('*').eq('user_id', userId);
+    return (error ? [] : data) as ScheduledTaskRecord[];
 }
 
-/**
- * Pauses a task.
- */
-export function pauseSchedule(userId: number, taskId: number): boolean {
-    const info = db.prepare("UPDATE scheduled_tasks SET status = 'paused' WHERE id = ? AND user_id = ?").run(taskId, userId);
-    if (info.changes > 0) {
-        const job = activeJobs.get(taskId);
-        if (job) {
-            job.stop();
-            activeJobs.delete(taskId);
-        }
+export async function pauseSchedule(userId: number, taskId: number): Promise<boolean> {
+    const { error } = await supabase.from('scheduled_tasks').update({ status: 'paused' }).match({ id: taskId, user_id: userId });
+    if (!error) {
+        activeJobs.get(taskId)?.stop();
+        activeJobs.delete(taskId);
         return true;
     }
     return false;
 }
 
-/**
- * Resumes a paused task.
- */
-export function resumeSchedule(userId: number, taskId: number): boolean {
-    const task = db.prepare("SELECT * FROM scheduled_tasks WHERE id = ? AND user_id = ?").get(taskId, userId) as ScheduledTaskRecord | undefined;
-    if (task) {
-        db.prepare("UPDATE scheduled_tasks SET status = 'active' WHERE id = ?").run(taskId);
-        task.status = "active";
-        
-        // Make sure it's not already running
-        if (activeJobs.has(taskId)) {
-            activeJobs.get(taskId)?.stop();
-        }
-
-        const job = cron.schedule(task.cron_expression, () => executeTask(task));
+export async function resumeSchedule(userId: number, taskId: number): Promise<boolean> {
+    const { data, error } = await supabase.from('scheduled_tasks').select('*').match({ id: taskId, user_id: userId }).single();
+    if (data && !error) {
+        await supabase.from('scheduled_tasks').update({ status: 'active' }).eq('id', taskId);
+        if (activeJobs.has(taskId)) activeJobs.get(taskId)?.stop();
+        const job = cron.schedule((data as ScheduledTaskRecord).cron_expression, () => executeTask(data as ScheduledTaskRecord));
         activeJobs.set(taskId, job);
         return true;
     }
     return false;
 }
 
-/**
- * Deletes a task.
- */
-export function deleteSchedule(userId: number, taskId: number): boolean {
-    const info = db.prepare("DELETE FROM scheduled_tasks WHERE id = ? AND user_id = ?").run(taskId, userId);
-    if (info.changes > 0) {
-        const job = activeJobs.get(taskId);
-        if (job) {
-            job.stop();
-            activeJobs.delete(taskId);
-        }
+export async function deleteSchedule(userId: number, taskId: number): Promise<boolean> {
+    const { error } = await supabase.from('scheduled_tasks').delete().match({ id: taskId, user_id: userId });
+    if (!error) {
+        activeJobs.get(taskId)?.stop();
+        activeJobs.delete(taskId);
         return true;
     }
     return false;
