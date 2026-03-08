@@ -27,7 +27,7 @@ import { config } from "../config.js";
 import { MCPClient } from "../mcp/client.js";
 
 // ── Internal Tool Executors ──────────────────────────────────────────
-const internalExecutors: Record<string, (input: Record<string, unknown>) => unknown> = {
+const internalExecutors: Record<string, (input: Record<string, unknown>, chatId?: number) => unknown> = {
     get_current_time: getCurrentTimeExec,
     store_memory: storeMemoryExec,
     recall_memory: recallMemoryExec,
@@ -71,11 +71,12 @@ export async function initializeTools(): Promise<void> {
 // ── Dispatcher ─────────────────────────────────────────────────────────
 export async function executeTool(
     name: string,
-    input: Record<string, unknown>
+    input: Record<string, unknown>,
+    chatId?: number
 ): Promise<unknown> {
     // 1. Check internal tools
     if (internalExecutors[name]) {
-        return internalExecutors[name](input);
+        return internalExecutors[name](input, chatId);
     }
 
     // 2. Check MCP tools (format: serverName__toolName)

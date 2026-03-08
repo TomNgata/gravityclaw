@@ -21,6 +21,7 @@ async function executeTask(task: ScheduledTaskRecord) {
         console.log(`⏰ Executing scheduled task ID ${task.id} for user ${task.user_id}: "${task.prompt}"`);
         const response = await handleMessage(
             `[SCHEDULED TASK TRIGGER] The user scheduled the following thought/action to occur now. Execute it and provide a response to the user:\n\nTask: ${task.prompt}`,
+            task.user_id,
             task.user_id
         );
         await bot.api.sendMessage(task.user_id, `⏰ *Scheduled Task Triggered*\n\n${response}`, { parse_mode: "Markdown" });

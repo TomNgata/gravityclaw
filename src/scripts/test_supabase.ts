@@ -8,10 +8,10 @@ async function testMigration() {
     try {
         // 1. Test Saving and Searching Memory
         console.log("   - Testing memory persistence...");
-        const memId = await saveMemory("Test cloud memory for Gravity Claw swarm.", "test");
+        const memId = await saveMemory("Test cloud memory for Gravity Claw swarm.", 999, "test");
         console.log(`   ✅ Memory saved with ID: ${memId}`);
 
-        const results = await searchMemoriesSemantic("Gravity Claw");
+        const results = await searchMemoriesSemantic("Gravity Claw", 999);
         if (results.length > 0) {
             console.log(`   ✅ Semantic search found ${results.length} results.`);
         } else {
@@ -20,7 +20,7 @@ async function testMigration() {
 
         // 2. Test Conversation History
         console.log("   - Testing conversation history...");
-        await logConversation(999, "Hello cloud!", "Response from swarm.");
+        await logConversation(999, 999, "Hello cloud!", "Response from swarm.");
         const history = await getRecentHistory(999, 1);
         if (history.length > 0 && (history[0].message === "Hello cloud!" || history[history.length-1].message === "Hello cloud!")) {
             console.log("   ✅ Conversation history verified.");

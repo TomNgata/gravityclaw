@@ -20,7 +20,7 @@ export const handleUpdate = webhookCallback(bot, "http", {
     secretToken: config.secretToken
 });
 
-// ── Security middleware: user ID whitelist ──────────────────────────────
+// ── Security & Admin Logic ──────────────────────────────────────────
 bot.use(async (ctx: Context, next) => {
     const userId = ctx.from?.id;
     if (!userId || !config.allowedUserIds.includes(userId)) {
@@ -29,6 +29,12 @@ bot.use(async (ctx: Context, next) => {
     }
     await next();
 });
+
+async function isAdmin(ctx: Context): Promise<boolean> {
+    if (ctx.chat?.type === "private") return true;
+    const member = await ctx.getChatMember(ctx.from!.id);
+    return ["administrator", "creator"].includes(member.status);
+}
 
 // ── Handle /start command ──────────────────────────────────────────────
 bot.command("start", async (ctx) => {
@@ -48,7 +54,10 @@ How can I help you today?`;
 // ── Handle /compact command ───────────────────────────────────────────
 bot.command("compact", async (ctx) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
 
     await ctx.replyWithChatAction("typing");
     await ctx.reply("📉 *Compacting session context...*", { parse_mode: "Markdown" });
@@ -65,7 +74,10 @@ bot.command("compact", async (ctx) => {
 // ── Handle /think command ─────────────────────────────────────────────
 bot.command("think", async (ctx) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
 
     const args = ctx.match.trim().toLowerCase();
     const validLevels = ["off", "low", "medium", "high"];
@@ -92,7 +104,10 @@ bot.command("think", async (ctx) => {
 // ── Handle /set_briefing & /set_recap ─────────────────────────────────
 bot.command("set_briefing", async (ctx) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
 
     const timeStr = ctx.match.trim();
     if (await setBriefingTime(userId, timeStr)) {
@@ -104,7 +119,10 @@ bot.command("set_briefing", async (ctx) => {
 
 bot.command("set_recap", async (ctx) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
 
     const timeStr = ctx.match.trim();
     if (await setRecapTime(userId, timeStr)) {
@@ -117,7 +135,10 @@ bot.command("set_recap", async (ctx) => {
 // ── Handle /schedule commands ──────────────────────────────────────────
 bot.command("schedule", async (ctx) => {
     const userId = ctx.from?.id;
-    if (!userId) return;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
 
     const input = ctx.match.trim();
     if (!input.includes("-")) {
@@ -160,8 +181,11 @@ bot.command("tasks", async (ctx) => {
 
 bot.command("pause_task", async (ctx) => {
     const userId = ctx.from?.id;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
     const taskId = parseInt(ctx.match.trim());
-    if (!userId || isNaN(taskId)) return;
 
     const success = await pauseSchedule(userId, taskId);
     await ctx.reply(success ? `⏸️ Task ${taskId} paused.` : `⚠️ Task ${taskId} not found.`);
@@ -169,8 +193,11 @@ bot.command("pause_task", async (ctx) => {
 
 bot.command("resume_task", async (ctx) => {
     const userId = ctx.from?.id;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
     const taskId = parseInt(ctx.match.trim());
-    if (!userId || isNaN(taskId)) return;
 
     const success = await resumeSchedule(userId, taskId);
     await ctx.reply(success ? `▶️ Task ${taskId} resumed.` : `⚠️ Task ${taskId} not found.`);
@@ -178,8 +205,11 @@ bot.command("resume_task", async (ctx) => {
 
 bot.command("delete_task", async (ctx) => {
     const userId = ctx.from?.id;
+    if (!userId || !(await isAdmin(ctx))) {
+        await ctx.reply("⚠️ Admin-only command.");
+        return;
+    }
     const taskId = parseInt(ctx.match.trim());
-    if (!userId || isNaN(taskId)) return;
 
     const success = await deleteSchedule(userId, taskId);
     await ctx.reply(success ? `🗑️ Task ${taskId} deleted.` : `⚠️ Task ${taskId} not found.`);
@@ -206,10 +236,9 @@ bot.on("message:voice", async (ctx) => {
         await finished(writer);
 
         const transcribedText = await transcribeAudio(filePath);
-        console.log(`🎤 Voice from ${userId}: ${transcribedText}`);
+        console.log(`🎤 Voice from ${userId} in ${ctx.chat.id}: ${transcribedText}`);
 
-        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-        const agentResponse = await handleMessage(transcribedText, userId);
+        const agentResponse = await handleMessage(transcribedText, userId, ctx.chat.id);
         await ctx.reply(agentResponse, { parse_mode: "Markdown" });
 
         unlinkSync(filePath);
@@ -230,10 +259,9 @@ bot.on("message:photo", async (ctx) => {
         const file = await ctx.getFile();
         const imageUrl = `https://api.telegram.org/file/bot${config.telegramBotToken}/${file.file_path}`;
         const caption = ctx.message.caption || "What is in this image?";
-        console.log(`📸 Photo from ${userId}: ${caption}`);
+        console.log(`📸 Photo from ${userId} in ${ctx.chat.id}: ${caption}`);
 
-        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-        const response = await handleMessage(caption, userId, imageUrl);
+        const response = await handleMessage(caption, userId, ctx.chat.id, imageUrl);
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
         console.error("Photo handler error:", error);
@@ -244,19 +272,27 @@ bot.on("message:photo", async (ctx) => {
 // ── Handle text messages → agent loop ──────────────────────────────────
 bot.on("message:text", async (ctx) => {
     const userMessage = ctx.message.text;
-    if (!userMessage) return;
+    const chatId = ctx.chat.id;
+    const isGroup = ctx.chat.type !== "private";
+
+    // "Respond only when mentioned" logic for groups
+    if (isGroup) {
+        const botUsername = ctx.me.username;
+        const isMentioned = userMessage.includes(`@${botUsername}`) || 
+                          (ctx.message.reply_to_message?.from?.id === ctx.me.id);
+        
+        if (!isMentioned) return;
+    }
 
     const userId = ctx.from!.id;
-    console.log(`📩 [Bot] Received text from ${userId}: "${userMessage.substring(0, 50)}${userMessage.length > 50 ? '...' : ''}"`);
+    console.log(`📩 [Bot] Received text from ${userId} in ${chatId}: "${userMessage.substring(0, 50)}..."`);
 
-    // Show "typing…" indicator while processing
     await ctx.replyWithChatAction("typing");
     try {
-        console.log(`🔍 [Agent] Orchestrating for user: ${userId}`);
-        const response = await handleMessage(userMessage, userId);
+        const response = await handleMessage(userMessage, userId, chatId);
         await ctx.reply(response, { parse_mode: "Markdown" });
     } catch (error) {
         console.error("Agent error:", error);
-        await ctx.reply("⚠️ Something went wrong. Check the console for details.");
+        await ctx.reply("⚠️ Something went wrong.");
     }
 });

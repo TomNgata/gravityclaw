@@ -26,7 +26,7 @@ Please include:
 Keep it concise, structured, and pleasant. Return ONLY the message you want sent to the user.`;
 
         // Direct the swarm to generate the briefing
-        const response = await handleMessage(prompt, userId);
+        const response = await handleMessage(prompt, userId, userId);
 
         await bot.api.sendMessage(userId, `🌅 *Morning Briefing*\n\n${response}`, { parse_mode: "Markdown" });
         console.log(`🌅 Morning Briefing sent successfully to ${userId}.`);

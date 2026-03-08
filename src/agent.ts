@@ -97,14 +97,15 @@ async function getExpertModels(userMessage: string, history: string, imageUrl?: 
 export async function handleMessage(
     userMessage: string,
     userId: number,
+    chatId: number,
     imageUrl?: string
 ): Promise<string> {
     // 1. Context Assembly
     const [memories, knowledgeItems, graphContext, history, mdContext] = await Promise.all([
-        searchMemoriesSemantic(userMessage, 3),
-        searchKnowledgeItems(userMessage, 2),
+        searchMemoriesSemantic(userMessage, chatId, 3),
+        searchKnowledgeItems(userMessage, 2), // KIs are global for now, but could be chat-isolated later
         graphManager.searchGraph(userMessage),
-        getRecentHistory(userId, 10),
+        getRecentHistory(chatId, 10),
         markdownMemory.loadAll()
     ]) as [any[], any[], string, any[], string];
     
@@ -182,12 +183,13 @@ export async function handleMessage(
     }
 
     // 4. Dispatch with Fallback Loop
-    return handleOpenRouterFallback(userMessage, userId, fullSystemPrompt, expertModels, imageUrl);
+    return handleOpenRouterFallback(userMessage, userId, chatId, fullSystemPrompt, expertModels, imageUrl);
 }
 
 async function handleOpenRouterFallback(
     userMessage: string,
     userId: number,
+    chatId: number,
     systemPrompt: string,
     models: string[],
     imageUrl?: string
@@ -254,7 +256,7 @@ async function handleOpenRouterFallback(
                     console.log(`🔧 [OpenRouter:${model}] Tool: ${toolCall.function.name}`);
                     try {
                         const args = JSON.parse(toolCall.function.arguments);
-                        const res = await executeTool(toolCall.function.name, args);
+                        const res = await executeTool(toolCall.function.name, args, chatId);
                         messages.push({
                             role: "tool",
                             tool_call_id: toolCall.id,
@@ -283,7 +285,7 @@ async function handleOpenRouterFallback(
         
         // If the deployment was successful and we got a response, return it (breaking the fallback loop)
         if (modelSucceeded && finalResponse) {
-            logConversation(userId, userMessage, finalResponse);
+            logConversation(userId, chatId, userMessage, finalResponse);
             
             // 🕸️ Update Knowledge Graph (Background)
             graphManager.extractFromText(`${userMessage}\n\n${finalResponse}`).then(({ entities, relationships }) => {
@@ -311,7 +313,7 @@ async function handleOpenRouterFallback(
                         const description = visionResponse.choices[0].message.content?.trim();
                         if (description) {
                             console.log("📸 Storing visual memory...");
-                            await saveMemory(description, "visual", 2, { type: "image", url: imageUrl });
+                            await saveMemory(description, chatId, "visual", 2, { type: "image", url: imageUrl });
                         }
                     } catch (e) {
                         console.error("Visual memory extraction error:", e);
@@ -325,6 +327,6 @@ async function handleOpenRouterFallback(
 
     // Exhausted all models
     const fallbackMsg = "⚠️ System Error: All assigned expert models failed in the queue (likely rate limits). Please try again later.";
-    logConversation(userId, userMessage, fallbackMsg);
+    logConversation(userId, chatId, userMessage, fallbackMsg);
     return fallbackMsg;
 }

@@ -34,7 +34,7 @@ Context: ${historyContext}
 
 Keep the tone concise, reflective, and supportive. Return ONLY the message to send.`;
 
-        const response = await handleMessage(prompt, userId);
+        const response = await handleMessage(prompt, userId, userId);
         await bot.api.sendMessage(userId, `🌙 *Evening Recap*\n\n${response}`, { parse_mode: "Markdown" });
         console.log(`🌙 Evening Recap sent to ${userId}.`);
     } catch (e) {

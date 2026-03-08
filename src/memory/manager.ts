@@ -19,6 +19,7 @@ export interface Memory {
     last_accessed?: string;
     timestamp?: string;
     similarity?: number;
+    chat_id?: number;
 }
 
 export interface KnowledgeItem {
@@ -31,6 +32,7 @@ export interface KnowledgeItem {
     source_message_ids?: string;
     timestamp?: string;
     similarity?: number;
+    chat_id?: number;
 }
 
 /**
@@ -54,6 +56,7 @@ async function getEmbedding(text: string): Promise<number[]> {
  */
 export async function saveMemory(
     content: string,
+    chatId: number,
     category: string = "facts",
     importance: number = 1,
     multimodal?: { type: string, url: string }
@@ -64,6 +67,7 @@ export async function saveMemory(
         .from('memories')
         .insert([{
             content,
+            chat_id: chatId,
             category,
             importance,
             media_type: multimodal?.type || null,
@@ -85,7 +89,7 @@ export async function saveMemory(
  * True semantic search using pgvector cosine similarity via Supabase RPC.
  * Falls back to ILIKE keyword search if no embeddings exist yet.
  */
-export async function searchMemoriesSemantic(query: string, limit: number = 5): Promise<Memory[]> {
+export async function searchMemoriesSemantic(query: string, chatId: number, limit: number = 5): Promise<Memory[]> {
     if (!query || query.trim().length === 0) return [];
 
     const queryEmbedding = await getEmbedding(query);
@@ -94,7 +98,8 @@ export async function searchMemoriesSemantic(query: string, limit: number = 5): 
     const { data: vectorResults, error: vectorError } = await supabase.rpc('match_memories', {
         query_embedding: `[${queryEmbedding.join(",")}]`,
         match_threshold: 0.40,
-        match_count: limit
+        match_count: limit,
+        p_chat_id: chatId
     });
 
     if (!vectorError && vectorResults && vectorResults.length > 0) {
@@ -200,10 +205,10 @@ export async function searchKnowledgeItems(query: string, limit: number = 3): Pr
 /**
  * Log a conversation exchange.
  */
-export async function logConversation(userId: number, message: string, response: string): Promise<void> {
+export async function logConversation(userId: number, chatId: number, message: string, response: string): Promise<void> {
     const { error } = await supabase
         .from('conversations')
-        .insert([{ user_id: userId, message, response }]);
+        .insert([{ user_id: userId, chat_id: chatId, message, response }]);
 
     if (error) console.error("❌ Supabase Log Conversation Error:", error);
 }
@@ -212,13 +217,13 @@ export async function logConversation(userId: number, message: string, response:
  * Get recent conversation history for a user.
  */
 export async function getRecentHistory(
-    userId: number,
+    chatId: number,
     limit: number = 10
 ): Promise<{ id: number, message: string, response: string }[]> {
     const { data, error } = await supabase
         .from('conversations')
         .select('id, message, response')
-        .eq('user_id', userId)
+        .eq('chat_id', chatId)
         .order('timestamp', { ascending: false })
         .limit(limit);
 
