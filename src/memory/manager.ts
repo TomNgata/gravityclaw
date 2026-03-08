@@ -118,6 +118,7 @@ export async function searchMemoriesSemantic(query: string, chatId: number, limi
     const { data, error } = await supabase
         .from('memories')
         .select('*')
+        .eq('chat_id', chatId)
         .ilike('content', `%${query}%`)
         .order('importance', { ascending: false })
         .limit(limit);
@@ -130,14 +131,12 @@ export async function searchMemoriesSemantic(query: string, chatId: number, limi
     return data as Memory[];
 }
 
-/**
- * Keyword search wrapper (for tools that need it explicitly).
- */
-export async function searchMemoriesFTS(query: string, limit: number = 5): Promise<Memory[]> {
+export async function searchMemoriesFTS(query: string, chatId: number, limit: number = 5): Promise<Memory[]> {
     if (!query || query.trim().length === 0) return [];
     const { data, error } = await supabase
         .from('memories')
         .select('*')
+        .eq('chat_id', chatId)
         .ilike('content', `%${query}%`)
         .order('importance', { ascending: false })
         .limit(limit);
