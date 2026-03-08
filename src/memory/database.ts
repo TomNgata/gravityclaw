@@ -78,6 +78,11 @@ db.exec(`
     FOREIGN KEY(source_id) REFERENCES entities(id),
     FOREIGN KEY(target_id) REFERENCES entities(id)
   );
+
+  CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INTEGER PRIMARY KEY,
+    thinking_level TEXT DEFAULT 'off'
+  );
 `);
 
 // ── Procedural Migrations ─────────────────────────────────────────────
@@ -113,6 +118,15 @@ try {
     console.log("🛠️ Migrating: Adding last_accessed to knowledge_items");
     db.exec("ALTER TABLE knowledge_items ADD COLUMN last_accessed DATETIME");
   }
+
+  // Ensure user_settings exists (in case the IF NOT EXISTS didn't catch an older environment)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id INTEGER PRIMARY KEY,
+      thinking_level TEXT DEFAULT 'off'
+    )
+  `);
+
 } catch (e) {
   console.error("Migration error:", e);
 }

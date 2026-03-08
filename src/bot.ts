@@ -9,6 +9,7 @@ import { finished } from "stream/promises";
 import axios from "axios";
 
 import { pruner } from "./memory/pruner.js";
+import { getThinkingLevel, setThinkingLevel, ThinkingLevel } from "./memory/settings.js";
 
 // ── Create bot (long-polling only — no web server) ─────────────────────
 export const bot = new Bot(config.telegramBotToken);
@@ -52,6 +53,32 @@ bot.command("compact", async (ctx) => {
     } catch (error) {
         console.error("Compact error:", error);
         await ctx.reply("⚠️ Failed to compact session.");
+    }
+});
+
+// ── Handle /think command ─────────────────────────────────────────────
+bot.command("think", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const args = ctx.match.trim().toLowerCase();
+    const validLevels = ["off", "low", "medium", "high"];
+
+    if (!args || !validLevels.includes(args)) {
+        const currentLevel = getThinkingLevel(userId);
+        await ctx.reply(
+            `🧠 *Thinking Level Configuration*\n\nCurrent Level: \`${currentLevel}\`\n\nUsage: \`/think [off|low|medium|high]\`\n- \`off\`: Default fast responses.\n- \`low\`: Brief step-by-step reasoning.\n- \`medium\`: Detailed step-by-step reasoning.\n- \`high\`: Exhaustive, multi-angle reasoning.`,
+            { parse_mode: "Markdown" }
+        );
+        return;
+    }
+
+    try {
+        setThinkingLevel(userId, args as ThinkingLevel);
+        await ctx.reply(`✅ *Thinking Level set to:* \`${args}\``, { parse_mode: "Markdown" });
+    } catch (e) {
+        console.error("Thinking level error:", e);
+        await ctx.reply("⚠️ Failed to update thinking level.");
     }
 });
 

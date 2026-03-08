@@ -7,6 +7,7 @@ import { graphManager } from "./memory/graph.js";
 import { pruner } from "./memory/pruner.js";
 import { markdownMemory } from "./memory/markdown.js";
 import { reorganizeMemory } from "./memory/manager.js";
+import { getThinkingLevel } from "./memory/settings.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -148,7 +149,22 @@ export async function handleMessage(
         ? `\n\nCORE PREFERENCES (Markdown Memory):\n${mdContext}` 
         : "";
 
-    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${graphContext}${historyContext}${markdownContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
+    // 2.1 Thinking Level Injection
+    const thinkingLevel = getThinkingLevel(userId);
+    let thinkingPrompt = "";
+    switch (thinkingLevel) {
+        case "low":
+            thinkingPrompt = "\n\nTHINKING LEVEL [LOW]: Think step-by-step briefly before answering.";
+            break;
+        case "medium":
+            thinkingPrompt = "\n\nTHINKING LEVEL [MEDIUM]: Provide detailed step-by-step reasoning before concluding.";
+            break;
+        case "high":
+            thinkingPrompt = "\n\nTHINKING LEVEL [HIGH]: Provide extremely thorough, exhaustive reasoning. Explore multiple angles, edge cases, and verifiable logic before arriving at a conclusion.";
+            break;
+    }
+
+    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${graphContext}${historyContext}${markdownContext}${thinkingPrompt}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
 
     // Trigger periodic auto-summarization (every 5 messages)
     if (history.length > 0 && history.length % 5 === 0) {
