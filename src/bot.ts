@@ -10,6 +10,7 @@ import axios from "axios";
 
 import { pruner } from "./memory/pruner.js";
 import { getThinkingLevel, setThinkingLevel, ThinkingLevel } from "./memory/settings.js";
+import { addSchedule, getTasks, pauseSchedule, resumeSchedule, deleteSchedule } from "./scheduler/index.js";
 
 // ── Create bot (long-polling only — no web server) ─────────────────────
 export const bot = new Bot(config.telegramBotToken);
@@ -80,6 +81,77 @@ bot.command("think", async (ctx) => {
         console.error("Thinking level error:", e);
         await ctx.reply("⚠️ Failed to update thinking level.");
     }
+});
+
+// ── Handle /schedule commands ──────────────────────────────────────────
+bot.command("schedule", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const input = ctx.match.trim();
+    if (!input.includes("-")) {
+        await ctx.reply(`🗓️ *Usage:* \`/schedule [time string] - [task description]\`\n\nExample: \`/schedule every day at 9am - Remind me to check emails\``, { parse_mode: "Markdown" });
+        return;
+    }
+
+    const parts = input.split("-");
+    const timeString = parts[0].trim();
+    const prompt = parts.slice(1).join("-").trim();
+
+    await ctx.replyWithChatAction("typing");
+    const result = await addSchedule(userId, timeString, prompt);
+    
+    if (result.success) {
+        await ctx.reply(`✅ ${result.message}`, { parse_mode: "Markdown" });
+    } else {
+        await ctx.reply(`⚠️ ${result.message}`);
+    }
+});
+
+bot.command("tasks", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const tasks = getTasks(userId);
+    if (tasks.length === 0) {
+        await ctx.reply("📋 You have no scheduled tasks.");
+        return;
+    }
+
+    let msg = "📋 *Your Scheduled Tasks:*\n\n";
+    for (const t of tasks) {
+        const icon = t.status === "active" ? "🟢" : "⏸️";
+        msg += `**ID ${t.id}** ${icon} [${t.cron_expression}]\n📝 ${t.prompt}\n\n`;
+    }
+    msg += `Use \`/pause_task [id]\`, \`/resume_task [id]\`, or \`/delete_task [id]\`.`;
+    await ctx.reply(msg, { parse_mode: "Markdown" });
+});
+
+bot.command("pause_task", async (ctx) => {
+    const userId = ctx.from?.id;
+    const taskId = parseInt(ctx.match.trim());
+    if (!userId || isNaN(taskId)) return;
+
+    const success = pauseSchedule(userId, taskId);
+    await ctx.reply(success ? `⏸️ Task ${taskId} paused.` : `⚠️ Task ${taskId} not found.`);
+});
+
+bot.command("resume_task", async (ctx) => {
+    const userId = ctx.from?.id;
+    const taskId = parseInt(ctx.match.trim());
+    if (!userId || isNaN(taskId)) return;
+
+    const success = resumeSchedule(userId, taskId);
+    await ctx.reply(success ? `▶️ Task ${taskId} resumed.` : `⚠️ Task ${taskId} not found.`);
+});
+
+bot.command("delete_task", async (ctx) => {
+    const userId = ctx.from?.id;
+    const taskId = parseInt(ctx.match.trim());
+    if (!userId || isNaN(taskId)) return;
+
+    const success = deleteSchedule(userId, taskId);
+    await ctx.reply(success ? `🗑️ Task ${taskId} deleted.` : `⚠️ Task ${taskId} not found.`);
 });
 
 // ── Handle Voice Messages ──────────────────────────────────────────────

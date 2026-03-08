@@ -83,6 +83,15 @@ db.exec(`
     user_id INTEGER PRIMARY KEY,
     thinking_level TEXT DEFAULT 'off'
   );
+
+  CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    cron_expression TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    status TEXT DEFAULT 'active',
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
 `);
 
 // ── Procedural Migrations ─────────────────────────────────────────────
@@ -119,11 +128,23 @@ try {
     db.exec("ALTER TABLE knowledge_items ADD COLUMN last_accessed DATETIME");
   }
 
-  // Ensure user_settings exists (in case the IF NOT EXISTS didn't catch an older environment)
+  // Ensure user_settings exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_settings (
       user_id INTEGER PRIMARY KEY,
       thinking_level TEXT DEFAULT 'off'
+    )
+  `);
+
+  // Ensure scheduled_tasks exists
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS scheduled_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      cron_expression TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
