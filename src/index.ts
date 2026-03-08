@@ -2,6 +2,9 @@ import { bot } from "./bot.js";
 import { initializeTools } from "./tools/index.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { loadSchedules, startProactiveLoops } from "./scheduler/index.js";
+import { createServer } from "http";
+import { handleUpdate } from "./bot.js";
+import { config } from "./config.js";
 
 const RETRY_DELAY_MS = 15000;
 const MAX_RETRIES = 5;
@@ -15,12 +18,19 @@ async function start(attempt: number = 1): Promise<void> {
         loadSchedules();
         startProactiveLoops();
 
-        await bot.start({
-            onStart: (info) => {
-                console.log(`🤖 Gravity Claw is online as @${info.username}`);
-                console.log(`🚀 Level 8 (Optimized Swarm V3) Active`);
-            },
-        });
+        if (process.env.USE_WEBHOOK === "true") {
+            const server = createServer(handleUpdate);
+            server.listen(config.port, () => {
+                console.log(`🚀 Gravity Claw Webhook Server running on port ${config.port}`);
+            });
+        } else {
+            await bot.start({
+                onStart: (info) => {
+                    console.log(`🤖 Gravity Claw is online as @${info.username} (Long Polling)`);
+                    console.log(`🚀 Level 8 (Optimized Swarm V3) Active`);
+                },
+            });
+        }
     } catch (error: any) {
         // Handle 409 Conflict: another instance is still running (Railway rolling deploy)
         if (error?.error_code === 409) {

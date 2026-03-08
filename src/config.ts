@@ -15,6 +15,9 @@ export interface Config {
     elevenLabsApiKey: string;
     mcpServers: MCPServerConfig[];
     llmModel: string;
+    webhookUrl?: string;
+    port: number;
+    secretToken: string;
 }
 
 function requireEnv(name: string, required: boolean = true): string | undefined {
@@ -47,4 +50,7 @@ export const config: Config = {
     elevenLabsApiKey: requireEnv("ELEVENLABS_API_KEY")!,
     mcpServers: process.env.MCP_SERVERS ? JSON.parse(process.env.MCP_SERVERS) : [],
     llmModel: process.env.LLM_MODEL || "google/gemma-3-12b-it:free",
+    webhookUrl: process.env.WEBHOOK_URL,
+    port: parseInt(process.env.PORT || "3000", 10),
+    secretToken: process.env.SECRET_TOKEN || "gravity-claw-secret",
 };

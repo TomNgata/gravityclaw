@@ -1,4 +1,4 @@
-import { Bot, Context } from "grammy";
+import { Bot, Context, webhookCallback } from "grammy";
 import { config } from "./config.js";
 import { handleMessage } from "./agent.js";
 import { transcribeAudio } from "./voice/stt.js";
@@ -12,8 +12,13 @@ import { pruner } from "./memory/pruner.js";
 import { getThinkingLevel, setThinkingLevel, ThinkingLevel, setBriefingTime, setRecapTime } from "./memory/settings.js";
 import { addSchedule, getTasks, pauseSchedule, resumeSchedule, deleteSchedule } from "./scheduler/index.js";
 
-// ── Create bot (long-polling only — no web server) ─────────────────────
+// ── Create bot ──────────────────────────────────────────────────────────
 export const bot = new Bot(config.telegramBotToken);
+
+// Webhook handler for cloud nodes
+export const handleUpdate = webhookCallback(bot, "http", {
+    secretToken: config.secretToken
+});
 
 // ── Security middleware: user ID whitelist ──────────────────────────────
 bot.use(async (ctx: Context, next) => {
