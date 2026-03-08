@@ -9,7 +9,7 @@ import { finished } from "stream/promises";
 import axios from "axios";
 
 import { pruner } from "./memory/pruner.js";
-import { getThinkingLevel, setThinkingLevel, ThinkingLevel } from "./memory/settings.js";
+import { getThinkingLevel, setThinkingLevel, ThinkingLevel, setBriefingTime, setRecapTime } from "./memory/settings.js";
 import { addSchedule, getTasks, pauseSchedule, resumeSchedule, deleteSchedule } from "./scheduler/index.js";
 
 // ── Create bot (long-polling only — no web server) ─────────────────────
@@ -79,7 +79,33 @@ bot.command("think", async (ctx) => {
         await ctx.reply(`✅ *Thinking Level set to:* \`${args}\``, { parse_mode: "Markdown" });
     } catch (e) {
         console.error("Thinking level error:", e);
+        console.error("Thinking level error:", e);
         await ctx.reply("⚠️ Failed to update thinking level.");
+    }
+});
+
+// ── Handle /set_briefing & /set_recap ─────────────────────────────────
+bot.command("set_briefing", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const timeStr = ctx.match.trim();
+    if (setBriefingTime(userId, timeStr)) {
+        await ctx.reply(`🌅 Morning Briefing time updated to \`${timeStr}\`.`, { parse_mode: "Markdown" });
+    } else {
+        await ctx.reply(`⚠️ Usage: \`/set_briefing HH:MM\` (24-hour format).`, { parse_mode: "Markdown" });
+    }
+});
+
+bot.command("set_recap", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    const timeStr = ctx.match.trim();
+    if (setRecapTime(userId, timeStr)) {
+        await ctx.reply(`🌙 Evening Recap time updated to \`${timeStr}\`.`, { parse_mode: "Markdown" });
+    } else {
+        await ctx.reply(`⚠️ Usage: \`/set_recap HH:MM\` (24-hour format).`, { parse_mode: "Markdown" });
     }
 });
 

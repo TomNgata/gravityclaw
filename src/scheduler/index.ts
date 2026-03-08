@@ -3,6 +3,8 @@ import { db } from "../memory/database.js";
 import { bot } from "../bot.js";
 import { handleMessage } from "../agent.js";
 import { parseNaturalLanguageToCron } from "./parser.js";
+import { sendMorningBriefing } from "../proactive/briefing.js";
+import { sendEveningRecap } from "../proactive/recap.js";
 
 // Store active scheduled tasks in memory for easy reference/cancellation
 const activeJobs = new Map<number, cron.ScheduledTask>();
@@ -52,6 +54,37 @@ export function loadSchedules() {
         }
     }
     console.log(`⏰ Loaded ${activeJobs.size} active tasks.`);
+}
+
+/**
+ * Starts a 1-minute ticker to check for Morning Briefings and Evening Recaps based on user_settings.
+ */
+export function startProactiveLoops() {
+    console.log("⏰ Starting Proactive Check Loop...");
+
+    cron.schedule("* * * * *", () => {
+        try {
+            const date = new Date();
+            const hhStr = String(date.getHours()).padStart(2, '0');
+            const mmStr = String(date.getMinutes()).padStart(2, '0');
+            const nowTimeStr = `${hhStr}:${mmStr}`;
+
+            // Check briefings
+            const briefings = db.prepare("SELECT user_id FROM user_settings WHERE briefing_time = ?").all(nowTimeStr) as { user_id: number }[];
+            for (const b of briefings) {
+                sendMorningBriefing(b.user_id);
+            }
+
+            // Check recaps
+            const recaps = db.prepare("SELECT user_id FROM user_settings WHERE recap_time = ?").all(nowTimeStr) as { user_id: number }[];
+            for (const r of recaps) {
+                sendEveningRecap(r.user_id);
+            }
+
+        } catch (error) {
+            console.error("Proactive Loop Error:", error);
+        }
+    });
 }
 
 /**

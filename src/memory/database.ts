@@ -128,13 +128,34 @@ try {
     db.exec("ALTER TABLE knowledge_items ADD COLUMN last_accessed DATETIME");
   }
 
+  const convoInfo = db.prepare("PRAGMA table_info(conversations)").all() as any[];
+  const convoColumns = convoInfo.map(c => c.name);
+  if (!convoColumns.includes("user_id")) {
+    console.log("🛠️ Migrating: Adding user_id to conversations");
+    // We add with a default value of 0 to avoid breaking NOT NULL constraints on older rows
+    db.exec("ALTER TABLE conversations ADD COLUMN user_id INTEGER DEFAULT 0");
+  }
+
   // Ensure user_settings exists
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_settings (
       user_id INTEGER PRIMARY KEY,
-      thinking_level TEXT DEFAULT 'off'
+      thinking_level TEXT DEFAULT 'off',
+      briefing_time TEXT DEFAULT '08:00',
+      recap_time TEXT DEFAULT '20:00'
     )
   `);
+
+  const settingsInfo = db.prepare("PRAGMA table_info(user_settings)").all() as any[];
+  const settingsColumns = settingsInfo.map(c => c.name);
+  if (!settingsColumns.includes("briefing_time")) {
+    console.log("🛠️ Migrating: Adding briefing_time to user_settings");
+    db.exec("ALTER TABLE user_settings ADD COLUMN briefing_time TEXT DEFAULT '08:00'");
+  }
+  if (!settingsColumns.includes("recap_time")) {
+    console.log("🛠️ Migrating: Adding recap_time to user_settings");
+    db.exec("ALTER TABLE user_settings ADD COLUMN recap_time TEXT DEFAULT '20:00'");
+  }
 
   // Ensure scheduled_tasks exists
   db.exec(`

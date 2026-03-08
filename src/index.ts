@@ -1,7 +1,7 @@
 import { bot } from "./bot.js";
 import { initializeTools } from "./tools/index.js";
 import { startHeartbeat } from "./heartbeat.js";
-import { loadSchedules } from "./scheduler/index.js";
+import { loadSchedules, startProactiveLoops } from "./scheduler/index.js";
 
 const RETRY_DELAY_MS = 15000;
 const MAX_RETRIES = 5;
@@ -13,6 +13,7 @@ async function start(attempt: number = 1): Promise<void> {
         await initializeTools();
         startHeartbeat();
         loadSchedules();
+        startProactiveLoops();
 
         await bot.start({
             onStart: (info) => {

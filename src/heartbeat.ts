@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { config } from "./config.js";
 import { db } from "./memory/database.js";
 import { bot } from "./bot.js";
+import { getRecommendationContext } from "./proactive/recommendations.js";
 
 const openrouter = new OpenAI({
     apiKey: config.openRouterApiKey,
@@ -13,13 +14,13 @@ const openrouter = new OpenAI({
  * even when not actively prompted by a user message.
  */
 export function startHeartbeat() {
-    console.log("💓 Heartbeat system initialized (60m cycle)");
+    console.log("💓 Heartbeat system initialized (15m cycle)");
     
-    // Run every hour
+    // Run every 15 minutes
     setInterval(async () => {
         console.log("💓 Heartbeat pulse: Analyzing internal state...");
         await performProactiveCheck();
-    }, 60 * 60 * 1000);
+    }, 15 * 60 * 1000);
 
     // Run once on startup (delayed slightly to ensure everything is online)
     setTimeout(() => performProactiveCheck(), 10000);
@@ -27,39 +28,50 @@ export function startHeartbeat() {
 
 async function performProactiveCheck() {
     try {
+        if (config.allowedUserIds.length === 0) return;
+        const adminId = config.allowedUserIds[0];
+
         // 1. Get system stats
         const memoryCount = db.prepare("SELECT COUNT(*) as count FROM memories").get() as { count: number };
         const kiCount = db.prepare("SELECT COUNT(*) as count FROM knowledge_items").get() as { count: number };
-        const lastConvo = db.prepare("SELECT * FROM conversations ORDER BY timestamp DESC LIMIT 1").get() as any;
+        const lastConvo = db.prepare("SELECT * FROM conversations WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1").get(adminId) as any;
 
         // 2. Formulate a "Proactive Thought"
+        const behaviorContext = getRecommendationContext(adminId);
+
         const prompt = `You are Gravity Claw's Heartbeat Monitor.
 Current System State:
 - Total Memories: ${memoryCount.count}
 - Knowledge Items: ${kiCount.count}
 - Last Activity: ${lastConvo ? lastConvo.timestamp : "None"}
 
-Your goal is to perform a "Self-Reflection". 
-- If the system has been idle, suggest a topic for the user to explore based on history.
-- If memories are high but KIs are low, suggest a cleanup/summarization.
-- Or simply provide a "Vibe Check" for the swarm's health.
+Behavior Patterns:
+${behaviorContext}
 
-Return a short (1-2 sentence) text status or insight for the internal logs.
-If there is something TRULY important for the admin, start the message with "NOTIFICATION:".`;
+Your goal is to perform a "Self-Reflection" and determine if you should proactively message the user.
+You MUST output valid JSON only, using this schema:
+{
+  "noteworthy": boolean, // true ONLY if there is an important insight, recommendation, or anomaly to share
+  "message": "The message to send to the user (if noteworthy is true, otherwise empty)"
+}
+
+Do NOT send a message if everything is normal and there are no strong recommendations to make. Respect the user's focus. Use the Behavior Patterns strictly.`;
 
         const response = await openrouter.chat.completions.create({
             model: "stepfun/step-3.5-flash:free",
             messages: [{ role: "user", content: prompt }],
-            max_tokens: 100,
+            response_format: { type: "json_object" },
+            max_tokens: 150,
         });
 
-        const thought = response.choices[0].message.content?.trim() || "System nominal.";
-        console.log(`💓 Heartbeat Thought: ${thought}`);
+        const content = response.choices[0].message.content?.trim() || "{}";
+        const parsed = JSON.parse(content);
+
+        console.log(`💓 Heartbeat Pulse Insight: Noteworthy=${parsed.noteworthy}`);
 
         // 3. If it's a notification, send it to the first allowed user (admin)
-        if (thought.startsWith("NOTIFICATION:") && config.allowedUserIds.length > 0) {
-            const adminId = config.allowedUserIds[0];
-            await bot.api.sendMessage(adminId, `💓 *Heartbeat Insight:*\n${thought.replace("NOTIFICATION:", "").trim()}`, {
+        if (parsed.noteworthy && parsed.message) {
+            await bot.api.sendMessage(adminId, `💡 *Proactive Insight:*\n${parsed.message.trim()}`, {
                 parse_mode: "Markdown"
             });
         }
