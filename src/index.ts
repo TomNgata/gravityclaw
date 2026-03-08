@@ -1,5 +1,6 @@
 import { bot } from "./bot.js";
 import { initializeTools } from "./tools/index.js";
+import { loadSkills } from "./skills/loader.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { loadSchedules, startProactiveLoops } from "./scheduler/index.js";
 import { createServer, IncomingMessage, ServerResponse } from "http";
@@ -41,6 +42,7 @@ async function start(attempt: number = 1): Promise<void> {
     try {
         console.log(`🦀 Gravity Claw starting... (attempt ${attempt})`);
 
+        await loadSkills();
         await initializeTools();
         startHeartbeat();
         loadSchedules();

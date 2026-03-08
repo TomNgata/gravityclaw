@@ -9,29 +9,39 @@ if (!existsSync(SKILLS_DIR)) {
     mkdirSync(SKILLS_DIR, { recursive: true });
 }
 
+let cachedSkills: string = "";
+
 /**
- * Reads all Markdown files in the /skills directory and concatenates them 
- * into a single context string to be injected into the system prompt.
+ * Loads all skills from the /skills directory into memory.
  */
-export async function getSkillsContext(): Promise<string> {
+export async function loadSkills(): Promise<void> {
     try {
         const files = await fs.readdir(SKILLS_DIR);
         const mdFiles = files.filter(f => f.endsWith(".md"));
 
         if (mdFiles.length === 0) {
-            return "";
+            cachedSkills = "";
+            return;
         }
 
-        let combinedSkills = "AVAILABLE SKILLS & PLUGINS:\n";
+        let combinedSkills = "\n\nAVAILABLE SKILLS & PLUGINS:\n";
         
         for (const file of mdFiles) {
             const content = await fs.readFile(path.join(SKILLS_DIR, file), "utf-8");
             combinedSkills += `\n--- Skill: ${file} ---\n${content}\n`;
         }
 
-        return combinedSkills;
+        cachedSkills = combinedSkills;
+        console.log(`🧠 Skills loaded from /skills (${mdFiles.length} files)`);
     } catch (e) {
-        console.error("Failed to load skills:", e);
-        return "";
+        console.error("❌ Failed to load skills:", e);
+        cachedSkills = "";
     }
+}
+
+/**
+ * Returns the cached skills context.
+ */
+export function getSkillsContext(): string {
+    return cachedSkills;
 }

@@ -1,0 +1,43 @@
+# 🚀 Deployment Guide
+
+Gravity Claw is built for **High Availability (HA)** using a multi-cloud swarm strategy. This guide covers how to set up the Hub and Spokes.
+
+## 1. Local Development
+For initial setup and testing:
+1. `npm install`
+2. `npm run dev` (Starts via `tsx watch`)
+
+## 2. Cloudflare Hub (Entry Point)
+The "Immortal Hub" handles incoming webhooks and manages traffic.
+1. Install Wrangler: `npm install -g wrangler`
+2. Update `wrangler.toml` with your spoke URLs.
+3. Deploy: `wrangler deploy`
+
+## 3. Distributed Spokes (Railway / Render)
+Spokes handle the heavy lifting (LLM logic, tool execution).
+
+### Railway Setup
+Use the provided automation scripts:
+1. `auth_railway.ps1`: Authenticates with your Railway account.
+2. `railway_setup.ps1`: Provisions the service and sets environment variables.
+
+### Render Setup
+1. Create a new "Web Service" from your GitHub repo.
+2. Use `npm install` as the build command and `npm start` as the start command.
+3. Add all required environment variables.
+
+## 4. Environment Variables Reference
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `TELEGRAM_BOT_TOKEN` | Yes | Token from @BotFather. |
+| `OPENROUTER_API_KEY` | Yes | Key for the LLM Swarm. |
+| `SUPABASE_URL` | Yes | Your Supabase project URL. |
+| `SUPABASE_ANON_KEY` | Yes | Anon/Public key for Supabase. |
+| `ALLOWED_USER_IDS` | Yes | CSV list of Telegram IDs allowed to use the bot. |
+| `SECRET_TOKEN` | Yes | For webhook validation (matches Cloudflare). |
+
+## 5. Security Hardening
+- **User Whitelisting**: Ensure `ALLOWED_USER_IDS` is strictly populated.
+- **Admin Roles**: Use `/isAdmin` logic in `bot.ts` to protect sensitive commands.
+- **Rate Limiting**: Configure `RATE_LIMIT_RPM` to prevent abuse.

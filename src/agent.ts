@@ -152,7 +152,7 @@ export async function handleMessage(
         : "";
 
     // 2.1 Skills System Injection
-    const skillsContextObj = await getSkillsContext();
+    const skillsContextObj = getSkillsContext();
     const skillsContext = skillsContextObj ? `\n\n${skillsContextObj}` : "";
 
     // 2.2 Thinking Level Injection

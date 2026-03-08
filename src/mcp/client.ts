@@ -15,6 +15,7 @@ export class MCPClient {
     constructor(private config: MCPServerConfig) {
         this.process = spawn(config.command, config.args, {
             stdio: ["pipe", "pipe", "inherit"],
+            shell: true,
         });
 
         this.client = new JSONRPCClient((request) => {
@@ -40,30 +41,48 @@ export class MCPClient {
     }
 
     async initialize(): Promise<void> {
-        await this.client.request("initialize", {
-            protocolVersion: "2024-11-05",
-            capabilities: {},
-            clientInfo: { name: "gravity-claw", version: "1.0.0" },
-        });
-        await this.client.notify("notifications/initialized", {});
+        try {
+            await this.client.request("initialize", {
+                protocolVersion: "2024-11-05",
+                capabilities: {},
+                clientInfo: { name: "gravity-claw", version: "1.0.0" },
+            });
+            await this.client.notify("notifications/initialized", {});
+            console.log(`🔌 [MCP:${this.config.name}] Initialized successfully.`);
+        } catch (error) {
+            console.error(`❌ [MCP:${this.config.name}] Initialization failed:`, error);
+            throw error;
+        }
     }
 
     async listTools(): Promise<ToolDefinition[]> {
-        const response = await this.client.request("tools/list", {});
-        return response.tools.map((tool: any) => ({
-            name: `${this.config.name}__${tool.name}`,
-            description: `[MCP: ${this.config.name}] ${tool.description}`,
-            input_schema: tool.inputSchema,
-        }));
+        try {
+            const response: any = await this.client.request("tools/list", {});
+            return response.tools.map((tool: any) => ({
+                name: `${this.config.name}__${tool.name}`,
+                description: `[MCP: ${this.config.name}] ${tool.description}`,
+                input_schema: tool.inputSchema,
+            }));
+        } catch (error) {
+            console.error(`❌ [MCP:${this.config.name}] Failed to list tools:`, error);
+            return [];
+        }
     }
 
     async callTool(name: string, args: any): Promise<any> {
-        // Strip the server prefix before calling the remote tool
-        const realName = name.replace(`${this.config.name}__`, "");
-        return await this.client.request("tools/call", {
-            name: realName,
-            arguments: args,
-        });
+        try {
+            // Strip the server prefix before calling the remote tool
+            const realName = name.replace(`${this.config.name}__`, "");
+            console.log(`🔧 [MCP:${this.config.name}] Calling tool: ${realName}`);
+            const response: any = await this.client.request("tools/call", {
+                name: realName,
+                arguments: args,
+            });
+            return response.content; // Content is usually an array of items for MCP
+        } catch (error) {
+            console.error(`❌ [MCP:${this.config.name}] Tool call failed (${name}):`, error);
+            return { error: `MCP Tool call failed: ${error}` };
+        }
     }
 
     destroy() {

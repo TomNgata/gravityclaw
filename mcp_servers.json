@@ -1,0 +1,7 @@
+[
+    {
+        "name": "everything",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-everything"]
+    }
+]
