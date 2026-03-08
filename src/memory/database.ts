@@ -22,7 +22,11 @@ db.exec(`
     category TEXT DEFAULT 'facts',
     embedding BLOB,
     importance INTEGER DEFAULT 1,
-    metadata TEXT,
+    metadata TEXT, -- JSON for extra data
+    media_type TEXT, -- e.g., 'image', 'audio', 'document'
+    media_url TEXT, -- local path or remote URL
+    access_count INTEGER DEFAULT 0,
+    last_accessed DATETIME,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -38,6 +42,8 @@ db.exec(`
     category TEXT DEFAULT 'general',
     embedding BLOB,
     source_message_ids TEXT, -- JSON array of conversation IDs
+    access_count INTEGER DEFAULT 0,
+    last_accessed DATETIME,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
@@ -74,17 +80,46 @@ db.exec(`
   );
 `);
 
+// ── Procedural Migrations ─────────────────────────────────────────────
+// Ensure columns exist even if tables were created in previous versions.
+try {
+  const tableInfo = db.prepare("PRAGMA table_info(memories)").all() as any[];
+  const columns = tableInfo.map(c => c.name);
+  
+  if (!columns.includes("media_type")) {
+    console.log("🛠️ Migrating: Adding media_type to memories");
+    db.exec("ALTER TABLE memories ADD COLUMN media_type TEXT");
+  }
+  if (!columns.includes("media_url")) {
+    console.log("🛠️ Migrating: Adding media_url to memories");
+    db.exec("ALTER TABLE memories ADD COLUMN media_url TEXT");
+  }
+  if (!columns.includes("access_count")) {
+    console.log("🛠️ Migrating: Adding access_count to memories");
+    db.exec("ALTER TABLE memories ADD COLUMN access_count INTEGER DEFAULT 0");
+  }
+  if (!columns.includes("last_accessed")) {
+    console.log("🛠️ Migrating: Adding last_accessed to memories");
+    db.exec("ALTER TABLE memories ADD COLUMN last_accessed DATETIME");
+  }
+
+  const kiInfo = db.prepare("PRAGMA table_info(knowledge_items)").all() as any[];
+  const kiColumns = kiInfo.map(c => c.name);
+  if (!kiColumns.includes("access_count")) {
+    console.log("🛠️ Migrating: Adding access_count to knowledge_items");
+    db.exec("ALTER TABLE knowledge_items ADD COLUMN access_count INTEGER DEFAULT 0");
+  }
+  if (!kiColumns.includes("last_accessed")) {
+    console.log("🛠️ Migrating: Adding last_accessed to knowledge_items");
+    db.exec("ALTER TABLE knowledge_items ADD COLUMN last_accessed DATETIME");
+  }
+} catch (e) {
+  console.error("Migration error:", e);
+}
+
 // ── Triggers for FTS Sync ──────────────────────────────────────────────
-// This keeps the FTS virtual tables in sync.
+// Note: We use manual sync in manager.ts for memory/entities to avoid SQLite logic errors with FTS5.
 
-db.exec(`
-  CREATE TRIGGER IF NOT EXISTS after_memories_insert AFTER INSERT ON memories BEGIN
-    INSERT INTO memories_fts(content, content_id) VALUES (new.content, new.id);
-  END;
-
-  CREATE TRIGGER IF NOT EXISTS after_entities_insert AFTER INSERT ON entities BEGIN
-    INSERT INTO entities_fts(name, content_id) VALUES (new.name, new.id);
-  END;
-`);
+console.log("📂 Database initialized at:", DB_PATH);
 
 console.log("📂 Database initialized at:", DB_PATH);

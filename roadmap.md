@@ -30,14 +30,21 @@ This document outlines the evolutionary stages of the Gravity Claw agentic swarm
     - **Knowledge Graph**: Stateful memory of interconnected entities and relationships with graph traversal context.
     - **Context Pruning**: Automated session summarization and `/compact` command to maintain token efficiency in long threads.
 
-### Level 11: Collaborative Consensus & Skills System
+### Level 11: Advanced Cognitive Memory [COMPLETE]
+- **Goal**: Biological-inspired memory systems for multimodal context and self-maintenance.
+- **Features**:
+    - **Multimodal Memory**: Vision-to-text extraction and semantic storage for cross-modal retrieval.
+    - **Self-Evolving Memory**: Semantic deduplication, access tracking, and importance-based decay.
+    - **Markdown Memory**: Human-readable and git-friendly persistent storage for core preferences.
+
+### Level 12: Collaborative Consensus & Skills System
 - **Goal**: Intra-swarm deliberation and extensible capability modules.
 - **Features**:
     - **Skills System**: A "no-code" plugin architecture where new capabilities are added via markdown "Skill Files".
     - **Critic-Member Pattern**: Multi-model verification of complex code or logic before response.
     - **Consensus Loop**: Voting-based decision making for high-stakes environmental actions.
 
-### Level 12: Autonomous Workflow Engineering
+### Level 13: Autonomous Workflow Engineering
 - **Goal**: Direct environmental manipulation and self-extension.
 - **Features**:
     - **Auto-MCP Generation**: The swarm identifies missing tools and writes its own MCP server code.

@@ -1,10 +1,12 @@
 import OpenAI from "openai";
 import { config } from "./config.js";
 import { toolDefinitions, executeTool } from "./tools/index.js";
-import { searchMemories, logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic } from "./memory/manager.js";
+import { searchMemories, logConversation, getRecentHistory, searchKnowledgeItems, searchMemoriesSemantic, saveMemory } from "./memory/manager.js";
 import { summarizeHistory } from "./memory/summarizer.js";
 import { graphManager } from "./memory/graph.js";
 import { pruner } from "./memory/pruner.js";
+import { markdownMemory } from "./memory/markdown.js";
+import { reorganizeMemory } from "./memory/manager.js";
 import fs from "fs/promises";
 import path from "path";
 
@@ -96,11 +98,12 @@ export async function handleMessage(
     imageUrl?: string
 ): Promise<string> {
     // 1. Context Assembly
-    const [memories, knowledgeItems, graphContext, history] = await Promise.all([
+    const [memories, knowledgeItems, graphContext, history, mdContext] = await Promise.all([
         searchMemoriesSemantic(userMessage, 3),
         searchKnowledgeItems(userMessage, 2),
         graphManager.searchGraph(userMessage),
-        getRecentHistory(userId, 10)
+        getRecentHistory(userId, 10),
+        markdownMemory.loadAll()
     ]);
     
     let historyText = history.map(h => `User: ${h.message}\nYou: ${h.response}`).join("\n");
@@ -141,11 +144,20 @@ export async function handleMessage(
         ? `\n\nRECENT CONVERSATION:\n${historyText}`
         : "";
 
-    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${graphContext}${historyContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
+    const markdownContext = mdContext 
+        ? `\n\nCORE PREFERENCES (Markdown Memory):\n${mdContext}` 
+        : "";
+
+    const fullSystemPrompt = `${basePersonality}${kiContext}${memoryContext}${graphContext}${historyContext}${markdownContext}\n\nYou are operating within the Gravity Claw framework. You are currently acting as a member of the swarm. Use your specialized strengths to fulfill the user's request.`;
 
     // Trigger periodic auto-summarization (every 5 messages)
     if (history.length > 0 && history.length % 5 === 0) {
         summarizeHistory(userId).catch(e => console.error("Auto-summarization trigger error:", e));
+    }
+
+    // Self-Evolving: Trigger memory reorganization periodically (every 10 messages)
+    if (history.length > 0 && history.length % 10 === 0) {
+        reorganizeMemory().catch(e => console.error("Memory reorganization error:", e));
     }
 
     // 4. Dispatch with Fallback Loop
@@ -259,6 +271,32 @@ async function handleOpenRouterFallback(
                     graphManager.saveGraphData(entities, relationships);
                 }
             }).catch(e => console.error("Graph background update error:", e));
+
+            // 📸 Multimodal Memory: Extract and store visual context
+            if (imageUrl) {
+                (async () => {
+                    try {
+                        const visionPrompt = "Describe this image in detail for long-term memory. Focus on people, objects, activities, and the overall setting. Return only the description.";
+                        const visionResponse = await openrouter.chat.completions.create({
+                            model: "google/gemma-3-12b-it:free",
+                            messages: [{
+                                role: "user",
+                                content: [
+                                    { type: "text", text: visionPrompt },
+                                    { type: "image_url", image_url: { url: imageUrl } }
+                                ]
+                            }]
+                        });
+                        const description = visionResponse.choices[0].message.content?.trim();
+                        if (description) {
+                            console.log("📸 Storing visual memory...");
+                            await saveMemory(description, "visual", 2, { type: "image", url: imageUrl });
+                        }
+                    } catch (e) {
+                        console.error("Visual memory extraction error:", e);
+                    }
+                })();
+            }
 
             return finalResponse;
         }
