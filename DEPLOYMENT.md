@@ -9,9 +9,16 @@ For initial setup and testing:
 
 ## 2. Cloudflare Hub (Entry Point)
 The "Immortal Hub" handles incoming webhooks and manages traffic.
+
+### Local Deployment
 1. Install Wrangler: `npm install -g wrangler`
 2. Update `wrangler.toml` with your spoke URLs.
 3. Deploy: `wrangler deploy`
+
+### Automated Deployment (GitHub Actions)
+This project is configured to deploy automatically to Cloudflare on every push to `master`.
+1. Ensure the `CLOUDFLARE_API_TOKEN` secret is added to your GitHub repository.
+2. The workflow is located at `.github/workflows/deploy-cloudflare.yml`.
 
 ## 3. Distributed Spokes (Railway / Render)
 Spokes handle the heavy lifting (LLM logic, tool execution).
@@ -36,6 +43,13 @@ Use the provided automation scripts:
 | `SUPABASE_ANON_KEY` | Yes | Anon/Public key for Supabase. |
 | `ALLOWED_USER_IDS` | Yes | CSV list of Telegram IDs allowed to use the bot. |
 | `SECRET_TOKEN` | Yes | For webhook validation (matches Cloudflare). |
+
+### GitHub Secrets
+The following secrets are required for automated deployments in GitHub Actions:
+
+| Secret | Description |
+| :--- | :--- |
+| `CLOUDFLARE_API_TOKEN` | API Token with "Edit Cloudflare Workers" permissions. |
 
 ## 5. Security Hardening
 - **User Whitelisting**: Ensure `ALLOWED_USER_IDS` is strictly populated.
