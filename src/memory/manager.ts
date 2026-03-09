@@ -228,7 +228,7 @@ export async function logConversation(userId: number, chatId: number, message: s
  */
 export async function getRecentHistory(
     chatId: number,
-    limit: number = 10
+    limit: number = 20
 ): Promise<{ id: number, message: string, response: string }[]> {
     const { data, error } = await supabase
         .from('conversations')

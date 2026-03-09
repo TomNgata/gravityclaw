@@ -31,8 +31,9 @@ async function loadPersonality(): Promise<string> {
         const soul = await fs.readFile(path.resolve(process.cwd(), "soul.md"), "utf-8").catch(() => "");
         const identity = await fs.readFile(path.resolve(process.cwd(), "identity.md"), "utf-8").catch(() => "");
         const personality = await fs.readFile(path.resolve(process.cwd(), "personality.md"), "utf-8").catch(() => "");
+        const userProfile = await fs.readFile(path.resolve(process.cwd(), "user.md"), "utf-8").catch(() => "");
         
-        const combined = `${soul}\n\n${identity}\n\n${personality}`.trim();
+        const combined = `${soul}\n\n${identity}\n\n${personality}\n\n${userProfile}`.trim();
         return combined || "You are Gravity Claw, a sophisticated multi-model agentic swarm.";
     } catch (e) {
         return "You are Gravity Claw, a sophisticated multi-model agentic swarm.";
@@ -105,7 +106,7 @@ export async function handleMessage(
         searchMemoriesSemantic(userMessage, chatId, 3),
         searchKnowledgeItems(userMessage, 2), // KIs are global for now, but could be chat-isolated later
         graphManager.searchGraph(userMessage),
-        getRecentHistory(chatId, 10),
+        getRecentHistory(chatId, 20),
         markdownMemory.loadAll()
     ]) as [any[], any[], string, any[], string];
     
