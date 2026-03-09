@@ -12,8 +12,8 @@ async function checkWebhook() {
   try {
     const response = await axios.get(`https://api.telegram.org/bot${token}/getWebhookInfo`);
     console.log("Webhook Info:", JSON.stringify(response.data, null, 2));
-  } catch (error) {
-    console.error("Error fetching webhook info:", error.message);
+  } catch (error: any) {
+    console.error("Error fetching webhook info:", error?.message || error);
   }
 }
 
