@@ -20,6 +20,35 @@ export const handleUpdate = webhookCallback(bot, "http", {
     secretToken: config.secretToken
 });
 
+// ── Messaging Utilities ────────────────────────────────────────────────
+async function safeReply(ctx: Context, message: string) {
+    if (!message) return;
+
+    // Telegram's limit is 4096 characters. We'll split it into chunks.
+    const MAX_LENGTH = 4000;
+    const chunks = [];
+    
+    for (let i = 0; i < message.length; i += MAX_LENGTH) {
+        chunks.push(message.substring(i, i + MAX_LENGTH));
+    }
+
+    for (const chunk of chunks) {
+        try {
+            // Attempt with Markdown first
+            await ctx.reply(chunk, { parse_mode: "Markdown" });
+        } catch (error: any) {
+            // Fallback to plain text if Markdown parsing fails (Status 400)
+            if (error.description?.includes("can't parse entities")) {
+                console.warn("⚠️ Markdown parsing failed, falling back to plain text.");
+                await ctx.reply(chunk);
+            } else {
+                console.error("❌ Telegram reply error:", error);
+                throw error; // Re-throw if it's something else (like connection drop)
+            }
+        }
+    }
+}
+
 // ── Security & Admin Logic ──────────────────────────────────────────
 bot.use(async (ctx: Context, next) => {
     const userId = ctx.from?.id;
@@ -239,7 +268,7 @@ bot.on("message:voice", async (ctx) => {
         console.log(`🎤 Voice from ${userId} in ${ctx.chat.id}: ${transcribedText}`);
 
         const agentResponse = await handleMessage(transcribedText, userId, ctx.chat.id);
-        await ctx.reply(agentResponse, { parse_mode: "Markdown" });
+        await safeReply(ctx, agentResponse);
 
         unlinkSync(filePath);
     } catch (error) {
@@ -262,7 +291,7 @@ bot.on("message:photo", async (ctx) => {
         console.log(`📸 Photo from ${userId} in ${ctx.chat.id}: ${caption}`);
 
         const response = await handleMessage(caption, userId, ctx.chat.id, imageUrl);
-        await ctx.reply(response, { parse_mode: "Markdown" });
+        await safeReply(ctx, response);
     } catch (error) {
         console.error("Photo handler error:", error);
         await ctx.reply("⚠️ Sorry, I couldn't analyze that image.");
@@ -290,7 +319,7 @@ bot.on("message:text", async (ctx) => {
     await ctx.replyWithChatAction("typing");
     try {
         const response = await handleMessage(userMessage, userId, chatId);
-        await ctx.reply(response, { parse_mode: "Markdown" });
+        await safeReply(ctx, response);
     } catch (error) {
         console.error("Agent error:", error);
         await ctx.reply("⚠️ Something went wrong.");
