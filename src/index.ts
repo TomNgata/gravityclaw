@@ -34,7 +34,15 @@ function createHttpServer() {
         }
 
         // ── Telegram Webhook ──────────────────────────────────────────
-        return handleUpdate(req, res);
+        try {
+            return await handleUpdate(req, res);
+        } catch (error) {
+            console.error("💥 Webhook Handler Error:", error);
+            if (!res.writableEnded) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ status: "error", message: "Internal Server Error" }));
+            }
+        }
     });
 }
 

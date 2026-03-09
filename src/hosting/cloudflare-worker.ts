@@ -52,9 +52,13 @@ export default {
     async dispatchToSwarm(update: any, env: Env) {
         const nodes = env.WORKER_NODES.split(",").map(n => n.trim());
         const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id;
+        let lastError = "Unknown error";
         
-        // Try to find an active node (simple failover)
+        // Try each node in the swarm with a timeout
         for (const node of nodes) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per node
+
             try {
                 const response = await fetch(node, {
                     method: "POST",
@@ -62,23 +66,39 @@ export default {
                         "Content-Type": "application/json",
                         "X-Telegram-Bot-Api-Secret-Token": env.SECRET_TOKEN
                     },
-                    body: JSON.stringify(update)
+                    body: JSON.stringify(update),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (response.ok) {
                     console.log(`Successfully dispatched to node: ${node}`);
                     return; // Task handled
-                } else if (response.status === 403) {
-                    console.error(`Node ${node} rejected request (403). Secret mismatch?`);
+                } else {
+                    lastError = `Node ${node} returned ${response.status}: ${response.statusText}`;
+                    console.error(lastError);
+                    if (response.status === 403) {
+                        console.error(`Node ${node} rejected request. Secret mismatch?`);
+                    }
                 }
-            } catch (e) {
-                console.warn(`Node ${node} failed or is sleeping. Trying next...`);
+            } catch (e: any) {
+                clearTimeout(timeoutId);
+                if (e.name === 'AbortError') {
+                    lastError = `Node ${node} timed out (10s)`;
+                } else {
+                    lastError = `Node ${node} connection failed: ${e.message}`;
+                }
+                console.warn(lastError);
             }
         }
         
         console.error("All Tier 2 nodes failed to respond.");
         if (chatId) {
-            await this.sendTelegramResponse(chatId, "⚠️ **Swarm Connectivity Error**: I couldn't reach any processing nodes. Please ensure your Tier 2 secrets (Telegram Token & Secret Token) are updated in Railway/Render.", env);
+            const errorMsg = `⚠️ **Swarm Connectivity Error**: I couldn't reach any processing nodes.\n\n` +
+                           `**Details:** ${lastError}\n\n` +
+                           `Please ensure your Tier 2 secrets (Telegram Token & Secret Token) are updated in Railway/Render.`;
+            await this.sendTelegramResponse(chatId, errorMsg, env);
         }
     },
 

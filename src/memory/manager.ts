@@ -39,14 +39,25 @@ export interface KnowledgeItem {
  * Generate a 1536-dimensional embedding using OpenRouter's text-embedding-3-small.
  */
 async function getEmbedding(text: string): Promise<number[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for embeddings
+
     try {
         const response = await openrouter.embeddings.create({
             model: "text-embedding-3-small",
             input: text.replace(/\n/g, " "),
+        }, {
+            signal: controller.signal as any // Type cast for OpenAI SDK compatibility
         });
+        clearTimeout(timeoutId);
         return response.data[0].embedding;
-    } catch (error) {
-        console.error("Embedding error:", error);
+    } catch (error: any) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            console.error("❌ Embedding request timed out (8s)");
+        } else {
+            console.error("Embedding error:", error);
+        }
         return new Array(1536).fill(0); // Zero vector fallback
     }
 }
