@@ -51,6 +51,7 @@ export default {
 
     async dispatchToSwarm(update: any, env: Env) {
         const nodes = env.WORKER_NODES.split(",").map(n => n.trim());
+        const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id;
         
         // Try to find an active node (simple failover)
         for (const node of nodes) {
@@ -67,12 +68,18 @@ export default {
                 if (response.ok) {
                     console.log(`Successfully dispatched to node: ${node}`);
                     return; // Task handled
+                } else if (response.status === 403) {
+                    console.error(`Node ${node} rejected request (403). Secret mismatch?`);
                 }
             } catch (e) {
                 console.warn(`Node ${node} failed or is sleeping. Trying next...`);
             }
         }
+        
         console.error("All Tier 2 nodes failed to respond.");
+        if (chatId) {
+            await this.sendTelegramResponse(chatId, "⚠️ **Swarm Connectivity Error**: I couldn't reach any processing nodes. Please ensure your Tier 2 secrets (Telegram Token & Secret Token) are updated in Railway/Render.", env);
+        }
     },
 
     async sendTelegramResponse(chatId: number, text: string, env: Env) {
