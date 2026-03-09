@@ -9,11 +9,7 @@ if (!existsSync(SKILLS_DIR)) {
     mkdirSync(SKILLS_DIR, { recursive: true });
 }
 
-interface Skill {
-    name: string;
-    content: string;
-}
-
+const PINNED_SKILLS = ["context-optimization.md"];
 let skillMap: Map<string, string> = new Map();
 
 /**
@@ -61,7 +57,16 @@ export function getSkillsContext(query: string): string {
     }
 
     const matchedSkills: string[] = [];
-    const maxSkills = 3;
+    
+    // 1. Always include pinned skills if they exist
+    for (const pinned of PINNED_SKILLS) {
+        const content = skillMap.get(pinned);
+        if (content) {
+            matchedSkills.push(`\n--- [PINNED] Skill: ${pinned} ---\n${content}\n`);
+        }
+    }
+
+    const maxSkills = 3 + matchedSkills.length;
 
     for (const [filename, content] of skillMap.entries()) {
         const lowerName = filename.toLowerCase();
