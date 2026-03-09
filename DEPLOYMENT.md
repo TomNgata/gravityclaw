@@ -50,8 +50,20 @@ The following secrets are required for automated deployments in GitHub Actions:
 | Secret | Description |
 | :--- | :--- |
 | `CLOUDFLARE_API_TOKEN` | API Token with "Edit Cloudflare Workers" permissions. |
+| `TELEGRAM_BOT_TOKEN` | Your new, rotated bot token from @BotFather. |
+| `SECRET_TOKEN` | A secure, random string for webhook validation. |
 
-## 5. Security Hardening
+## 5. Secrets Management
+To keep your credentials secure, **never** hardcode them in `wrangler.toml` or any public file.
+
+### For Cloudflare Workers
+Run these commands locally to add secrets to your production worker:
+```bash
+wrangler secret put TELEGRAM_BOT_TOKEN
+wrangler secret put SECRET_TOKEN
+```
+
+## 6. Security Hardening
 - **User Whitelisting**: Ensure `ALLOWED_USER_IDS` is strictly populated.
 - **Admin Roles**: Use `/isAdmin` logic in `bot.ts` to protect sensitive commands.
 - **Rate Limiting**: Configure `RATE_LIMIT_RPM` to prevent abuse.

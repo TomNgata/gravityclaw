@@ -3,6 +3,4 @@ main = "src/hosting/cloudflare-worker.ts"
 compatibility_date = "2024-03-08"
 
 [vars]
-TELEGRAM_BOT_TOKEN = "8514439375:AAH6QL4XiJg0KTV6_YdeIm_qN21sQpWMj9w"
-SECRET_TOKEN = "gravity-claw-secret-999"
 WORKER_NODES = "https://gravityclaw-fey4.onrender.com, https://gravityclaw-production-16f7.up.railway.app"
