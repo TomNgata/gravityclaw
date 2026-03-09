@@ -20,6 +20,7 @@ export interface Config {
     webhookUrl?: string;
     port: number;
     secretToken: string;
+    firecrawlApiKey?: string;
 }
 
 function requireEnv(name: string, required: boolean = true): string | undefined {
@@ -70,4 +71,5 @@ export const config: Config = {
     webhookUrl: process.env.WEBHOOK_URL,
     port: parseInt(process.env.PORT || "3000", 10),
     secretToken: process.env.SECRET_TOKEN || "gravity-claw-secret",
+    firecrawlApiKey: process.env.FIRECRAWL_API_KEY,
 };

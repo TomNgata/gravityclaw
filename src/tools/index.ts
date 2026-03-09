@@ -22,6 +22,10 @@ import {
     writeFileSystemDef,
     writeFileSystemExec,
 } from "./system_tools.js";
+import {
+    scraperDef,
+    scraperExec,
+} from "./scraper.js";
 
 import { config } from "../config.js";
 import { MCPClient } from "../mcp/client.js";
@@ -34,6 +38,7 @@ const internalExecutors: Record<string, (input: Record<string, unknown>, chatId?
     execute_shell: executeShellExec,
     read_file: readFileSystemExec,
     write_file: writeFileSystemExec,
+    scraper: scraperExec,
 };
 
 // ── State ──────────────────────────────────────────────────────────
@@ -44,6 +49,7 @@ export let toolDefinitions: ToolDefinition[] = [
     executeShellDef,
     readFileSystemDef,
     writeFileSystemDef,
+    scraperDef,
 ];
 
 const mcpClients: Record<string, MCPClient> = {};
